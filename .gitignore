@@ -1,0 +1,16 @@
+# Build output
+/build/
+
+# Rendered frames from ./shot.sh (kept out of the repo)
+*.png
+# ...except the screenshots referenced by the docs
+!docs/screenshots/*.png
+
+# Editor / OS cruft
+*.o
+*.a
+.DS_Store
+*.swp
+.idea/
+.vscode/
+compile_commands.json

@@ -1,0 +1,29 @@
+Watch Firmware & Emulator
+Copyright 2026 jnkwatch
+
+This product includes software developed as an open-source project,
+licensed under the Apache License, Version 2.0 (see LICENSE).
+
+--------------------------------------------------------------------------------
+Third-party components
+--------------------------------------------------------------------------------
+
+LVGL (Light and Versatile Graphics Library) — v9.2.x
+  MIT License. Copyright (c) 2021 LVGL Kft.
+  https://github.com/lvgl/lvgl
+  Included as a git submodule under lvgl/.
+
+Unity — unit test framework
+  MIT License. Copyright (c) 2007-2023 Mike Karlesky, Mark VanderVoord,
+  Greg Williams.
+  https://github.com/ThrowTheSwitch/Unity
+  Included as a git submodule under third_party/unity/.
+
+stb_image_write.h — PNG writer
+  Public Domain (or MIT). By Sean Barrett.
+  https://github.com/nothings/stb
+  Vendored under third_party/.
+
+Montserrat font (used to generate ui/fonts/wf_digits_100.c)
+  SIL Open Font License 1.1. Copyright The Montserrat Project Authors.
+  The TTF ships with LVGL under lvgl/scripts/built_in_font/.
