@@ -14,3 +14,6 @@
 .idea/
 .vscode/
 compile_commands.json
+
+# Vendor hardware docs (large binaries — kept local, not committed)
+/docs/hardware/vendor/
