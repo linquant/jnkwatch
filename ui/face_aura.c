@@ -11,6 +11,8 @@
 
 #define NP 60          /* particle count */
 #define R 210.0        /* round boundary radius (~UI_SAFE_R) */
+#define AURA_SHAKE_TH   0.28  /* |‖a‖-1g| above this = a shake (rest ~0.08) */
+#define AURA_FLASH_FRAMES 26  /* explosion flash / re-arm duration (frames)  */
 #define CXf 233.0
 #define CYf 233.0
 #define TIME_Y (-8)
@@ -20,7 +22,7 @@ typedef struct { double x, y, vx, vy; } particle_t;
 
 static particle_t ps[NP];
 static lv_obj_t *canvas;
-static uint8_t cbuf[LV_CANVAS_BUF_SIZE(WATCH_SIZE, WATCH_SIZE, 16, 1)] __attribute__((aligned(4)));
+static uint8_t cbuf[LV_CANVAS_BUF_SIZE(WATCH_SIZE, WATCH_SIZE, 16, 1)] WF_BIG_BSS __attribute__((aligned(4)));
 static lv_obj_t *glow[NGLOW], *core, *date_lbl;
 static wf_activity_t act;
 static uint32_t rng = 2463534242u;
@@ -83,14 +85,36 @@ void face_aura_tick(void)
 {
     double ax, ay, az;
     watch_read_accel(&ax, &ay, &az);
+    double mag = sqrt(ax * ax + ay * ay + az * az);
+    double dev = fabs(mag - 1.0);          /* dynamic motion energy, in g */
     double e = wf_activity_update(&act, ax, ay, az);
 
-    /* Stays in the current teinte: calm = pure accent, energetic = accent
-     * brightened toward white so motion reads as heat without leaving the hue. */
-    lv_color_t col = lv_color_mix(lv_color_white(), theme_accent(), (uint8_t)(e * 150));
-    double speed = 0.4 + e * 3.5;
-    int psize = (int)(4 + e * 7);
-    lv_opa_t popa = (lv_opa_t)(70 + e * 185);
+    /* Shake -> explosion. Resting noise is ~0.08g; a real shake exceeds ~0.5g.
+     * `flash` counts down after a burst so a long shake fires bursts spaced out
+     * (and drives the white flash + particle enlargement while it decays). */
+    static int flash = 0;
+    if (flash > 0) flash--;
+    int boom = (dev > AURA_SHAKE_TH && flash == 0);
+    if (boom) flash = AURA_FLASH_FRAMES;
+    double burst = flash / (double)AURA_FLASH_FRAMES;   /* 1 -> 0 after a boom */
+
+    /* In-plane gravity pulls the particles "downhill" so they pool into a block
+     * on one side; -(in-plane a) is the downhill direction. During/just after an
+     * explosion gravity is suppressed (gacc) so the scattered particles float
+     * freely, then it fades back in to re-accumulate them. */
+    double gx = -ax, gy = -ay;
+    const double GACC = 0.8;    /* gravity strength (px/frame^2 per g) */
+    const double DAMP = 0.92;   /* velocity damping (friction)         */
+    double gacc = GACC * (1.0 - burst);
+    double jitter = 0.25 + e * 2.0;
+
+    /* Calm = pure accent; motion and the explosion flash brighten toward white. */
+    int mix = (int)(e * 120 + burst * 200);
+    if (mix > 255) mix = 255;
+    lv_color_t col = lv_color_mix(lv_color_white(), theme_accent(), (uint8_t)mix);
+    int psize = (int)(4 + e * 3 + burst * 5);
+    int opv = (int)(90 + e * 100 + burst * 65);
+    lv_opa_t popa = (lv_opa_t)(opv > 255 ? 255 : opv);
 
     lv_canvas_fill_bg(canvas, COL_BG, LV_OPA_COVER);
     lv_layer_t layer;
@@ -102,17 +126,28 @@ void face_aura_tick(void)
     d.radius = LV_RADIUS_CIRCLE;
 
     for (int i = 0; i < NP; i++) {
-        ps[i].x += ps[i].vx * speed;
-        ps[i].y += ps[i].vy * speed;
+        if (boom) {                         /* fling in a random direction */
+            double ang = frnd() * 6.2831853;
+            double spd = 12.0 + frnd() * 10.0;
+            ps[i].vx = spd * cos(ang);
+            ps[i].vy = spd * sin(ang);
+        } else {                            /* settle under gravity + shimmer */
+            ps[i].vx = ps[i].vx * DAMP + gx * gacc + (frnd() - 0.5) * jitter;
+            ps[i].vy = ps[i].vy * DAMP + gy * gacc + (frnd() - 0.5) * jitter;
+        }
+        ps[i].x += ps[i].vx;
+        ps[i].y += ps[i].vy;
+
         double dx = ps[i].x - CXf, dy = ps[i].y - CYf;
         double dist = sqrt(dx * dx + dy * dy);
-        if (dist > R) {                     /* bounce off the round edge */
+        double lim = R - psize;
+        if (dist > lim) {                   /* bounce off the round edge (lossy) */
             double nx = dx / dist, ny = dy / dist;
             double dot = ps[i].vx * nx + ps[i].vy * ny;
-            ps[i].vx -= 2 * dot * nx;
-            ps[i].vy -= 2 * dot * ny;
-            ps[i].x = CXf + nx * R;
-            ps[i].y = CYf + ny * R;
+            ps[i].vx -= 1.6 * dot * nx;
+            ps[i].vy -= 1.6 * dot * ny;
+            ps[i].x = CXf + nx * lim;
+            ps[i].y = CYf + ny * lim;
         }
         int x = (int)ps[i].x, y = (int)ps[i].y;
         lv_area_t a = { x, y, x + psize, y + psize };
