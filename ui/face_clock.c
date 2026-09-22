@@ -12,14 +12,13 @@
 /* --- Dual Display watchface (466px native) ---------------------------------
  * Casio-style split screen: big LCD time on the left (HH / MM / :SS), a
  * hairline divider, and a status column on the right (date, battery, weather,
- * steps, unread bell). The accent teinte tints the hour, seconds, bell and a
- * faint backlight wash. */
+ * steps, unread bell). The accent teinte tints the hour, seconds and the bell.
+ * No backlight wash — the AMOLED background stays truly black. */
 
 #define COL_STATUS  lv_color_hex(0xC7D2D8) /* bright status text            */
 #define COL_ICON    lv_color_hex(0x9AA6AD) /* muted icon grey (cloud)       */
 #define COL_DIVIDER lv_color_hex(0x2A3138) /* hairline between the columns   */
 
-static lv_obj_t *wash;                 /* accent backlight tint (per teinte) */
 static lv_obj_t *hh, *mm, *ss;         /* left LCD time                      */
 static lv_obj_t *date_lbl;             /* "18 SEP"                           */
 static lv_obj_t *batt_ico, *batt_lbl;  /* battery icon + "82%"              */
@@ -85,7 +84,6 @@ static void make_cloud(lv_obj_t *p)
 void face_clock_apply_accent(void)
 {
     lv_color_t a = theme_accent();
-    lv_obj_set_style_bg_color(wash, a, 0);
     lv_obj_set_style_text_color(hh, a, 0);
     lv_obj_set_style_text_color(ss, a, 0);
     lv_obj_set_style_text_color(bell, a, 0);
@@ -101,15 +99,7 @@ static void on_cycle(lv_event_t *e)
 
 void face_clock_create(lv_obj_t *p)
 {
-    /* Faint accent backlight wash + subtle inner bezel ring. */
-    wash = lv_obj_create(p);
-    lv_obj_remove_style_all(wash);
-    lv_obj_set_size(wash, 410, 410);
-    lv_obj_center(wash);
-    lv_obj_set_style_radius(wash, LV_RADIUS_CIRCLE, 0);
-    lv_obj_set_style_bg_opa(wash, 26, 0);
-    lv_obj_remove_flag(wash, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
-
+    /* Subtle inner bezel ring (no backlight wash — keep the AMOLED truly black). */
     lv_obj_t *ring = lv_obj_create(p);
     lv_obj_remove_style_all(ring);
     lv_obj_set_size(ring, 434, 434);
