@@ -98,17 +98,37 @@ static void draw_icon(lv_obj_t *cv, int w, icon_t t, lv_color_t col)
     lv_canvas_finish_layer(cv, &layer);
 }
 
-/* Choose icons for the current state and (re)draw them. */
+static void show_btn(lv_obj_t *b, int on)
+{
+    if (on) lv_obj_remove_flag(b, LV_OBJ_FLAG_HIDDEN);
+    else    lv_obj_add_flag(b, LV_OBJ_FLAG_HIDDEN);
+}
+
+/* Choose icons + which side buttons are visible for the current state.
+ *   IDLE           : [-] [play] [+]
+ *   RUNNING/PAUSED : [ ] [pause/play] [reset]   (minus zone goes black)
+ *   DONE           : [ ] [reset] [ ]            (only the centre reset)
+ */
 static void refresh_controls(void)
 {
     lv_color_t a = theme_accent();
     t_primary = tmr.state == WF_TMR_RUNNING ? IC_PAUSE :
                 tmr.state == WF_TMR_DONE    ? IC_RESET : IC_PLAY;
-    if (tmr.state == WF_TMR_IDLE) { t_minus = IC_MINUS; t_plus = IC_PLUS; }
-    else                          { t_minus = IC_RESET; t_plus = IC_RESET; }
     draw_icon(ic_primary, ICP, t_primary, a);
-    draw_icon(ic_minus,   ICS, t_minus,   a);
-    draw_icon(ic_plus,    ICS, t_plus,    a);
+
+    if (tmr.state == WF_TMR_IDLE) {
+        show_btn(btn_minus, 1); show_btn(btn_plus, 1);
+        t_minus = IC_MINUS; t_plus = IC_PLUS;
+        draw_icon(ic_minus, ICS, t_minus, a);
+        draw_icon(ic_plus,  ICS, t_plus,  a);
+    } else if (tmr.state == WF_TMR_DONE) {
+        show_btn(btn_minus, 0); show_btn(btn_plus, 0);
+    } else { /* RUNNING or PAUSED: a single reset on the plus, minus blanked */
+        show_btn(btn_minus, 0);
+        show_btn(btn_plus, 1);
+        t_plus = IC_RESET;
+        draw_icon(ic_plus, ICS, t_plus, a);
+    }
 }
 
 static void on_primary(lv_event_t *e)
