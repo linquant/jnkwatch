@@ -2,7 +2,7 @@
 #include "lvgl.h"
 
 /* Shared neon/tech palette used by every face. */
-#define COL_BG      lv_color_hex(0x05070A) /* near-black background   */
+#define COL_BG      lv_color_hex(0x000000) /* pure black (AMOLED: unlit pixels) */
 #define COL_CORE    lv_color_hex(0xEAFFFF) /* bright digit core       */
 #define COL_GLOW    lv_color_hex(0x00E5FF) /* cyan halo               */
 #define COL_SEC     lv_color_hex(0xFF2E9A) /* magenta accent          */
