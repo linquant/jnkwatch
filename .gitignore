@@ -17,3 +17,10 @@ compile_commands.json
 
 # Vendor hardware docs (large binaries — kept local, not committed)
 /docs/hardware/vendor/
+
+# ESP-IDF firmware build artifacts
+/firmware/build/
+/firmware/managed_components/
+/firmware/sdkconfig
+/firmware/sdkconfig.old
+/firmware/dependencies.lock

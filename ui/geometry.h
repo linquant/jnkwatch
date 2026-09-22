@@ -15,3 +15,12 @@
  * so cards/rows can be sized to stay inside the safe circle. */
 #define UI_CHORD_HALF(h) \
     ((int)__builtin_sqrt((double)UI_SAFE_R * UI_SAFE_R - (double)(h) * (h)))
+
+/* Place big static buffers (e.g. a full-screen canvas) in external PSRAM on
+ * device; a no-op on the PC build. Keeps internal DRAM from overflowing. */
+#ifdef ESP_PLATFORM
+#include "esp_attr.h"
+#define WF_BIG_BSS EXT_RAM_BSS_ATTR
+#else
+#define WF_BIG_BSS
+#endif
