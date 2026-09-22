@@ -13,8 +13,6 @@
 #include "screentime.h"
 #include "lvgl.h"
 
-#define SLEEP_MS 6000  /* screen sleeps after this much inactivity */
-
 /* Faces live in a horizontal tileview: swipe left/right to switch. */
 static lv_obj_t *tv;
 static lv_obj_t *tile_notif; /* tracked so we can clear unread when shown */
@@ -43,7 +41,7 @@ static void power_tick(void)
         lv_obj_set_style_bg_color(sleep_overlay, lv_color_black(), 0);
         lv_obj_remove_flag(sleep_overlay, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
     }
-    bool asleep = lv_display_get_inactive_time(disp) > SLEEP_MS;
+    bool asleep = lv_display_get_inactive_time(disp) > (uint32_t)face_settings_sleep_ms();
     lv_obj_set_style_bg_opa(sleep_overlay, asleep ? LV_OPA_COVER : LV_OPA_TRANSP, 0);
 
     /* Accumulate screen-on time (screen counts as "on" when not asleep). */

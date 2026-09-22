@@ -4,6 +4,7 @@ void wf_settings_init(wf_settings_t *s)
 {
     s->brightness = 80;
     s->wrist_wake = true;
+    s->sleep_ms = WF_SLEEP_10S;
 }
 
 int wf_settings_set_brightness(wf_settings_t *s, int pct)
@@ -17,4 +18,11 @@ int wf_settings_set_brightness(wf_settings_t *s, int pct)
 void wf_settings_set_wrist_wake(wf_settings_t *s, bool on)
 {
     s->wrist_wake = on;
+}
+
+int wf_settings_set_sleep_ms(wf_settings_t *s, int ms)
+{
+    /* midpoint between the two allowed values */
+    s->sleep_ms = (ms < (WF_SLEEP_5S + WF_SLEEP_10S) / 2) ? WF_SLEEP_5S : WF_SLEEP_10S;
+    return s->sleep_ms;
 }
