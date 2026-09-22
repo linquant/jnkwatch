@@ -41,7 +41,15 @@ static void power_tick(void)
         lv_obj_set_style_bg_color(sleep_overlay, lv_color_black(), 0);
         lv_obj_remove_flag(sleep_overlay, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
     }
-    bool asleep = lv_display_get_inactive_time(disp) > (uint32_t)face_settings_sleep_ms();
+    /* Only auto-sleep when there is a registered input device that can wake us
+     * (touch on hardware, the SDL pointer on PC). During device bring-up before
+     * touch/IMU are wired there is no wake source, and staying awake beats a
+     * screen that blacks out forever. Wrist-wake is not counted here: it is on
+     * by default but the accelerometer HAL is still stubbed, so it cannot yet
+     * generate a real raise. */
+    bool can_wake = lv_indev_get_next(NULL) != NULL;
+    bool asleep = can_wake &&
+        lv_display_get_inactive_time(disp) > (uint32_t)face_settings_sleep_ms();
     lv_obj_set_style_bg_opa(sleep_overlay, asleep ? LV_OPA_COVER : LV_OPA_TRANSP, 0);
 
     /* Accumulate screen-on time (screen counts as "on" when not asleep). */
