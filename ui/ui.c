@@ -16,6 +16,7 @@
 /* Faces live in a horizontal tileview: swipe left/right to switch. */
 static lv_obj_t *tv;
 static lv_obj_t *tile_notif; /* tracked so we can clear unread when shown */
+static lv_obj_t *tile_aura;  /* tracked so its costly canvas only animates when shown */
 static lv_obj_t *dim_overlay;
 static lv_obj_t *sleep_overlay;
 static wf_wrist_t wrist;
@@ -99,15 +100,19 @@ void ui_init(void)
     lv_obj_set_style_bg_opa(tv, LV_OPA_COVER, 0);
 
     /* Horizontal strip: actions | notif | clock | timer | settings | debug.
-     * The two TIME watchfaces (clock + aura) share ONE horizontal slot (col 2):
-     * clock on top, aura stacked below it — swipe UP/DOWN to switch between the
-     * two, swipe LEFT/RIGHT to move along the strip. Clock is the boot face. */
+     * The two TIME watchfaces (clock + aura) share col 2 (swipe up/down), and
+     * SETTINGS is a 4-row column (col 4): brightness / veille / couleurs /
+     * poignet, swipe up/down; swipe LEFT/RIGHT moves along the strip. Clock is
+     * the boot face. */
     lv_obj_t *tile_actions  = lv_tileview_add_tile(tv, 0, 0, LV_DIR_RIGHT);
     tile_notif              = lv_tileview_add_tile(tv, 1, 0, LV_DIR_HOR);
     lv_obj_t *tile_clock    = lv_tileview_add_tile(tv, 2, 0, LV_DIR_HOR | LV_DIR_BOTTOM);
-    lv_obj_t *tile_aura     = lv_tileview_add_tile(tv, 2, 1, LV_DIR_TOP);
+    tile_aura               = lv_tileview_add_tile(tv, 2, 1, LV_DIR_TOP);
     lv_obj_t *tile_timer    = lv_tileview_add_tile(tv, 3, 0, LV_DIR_HOR);
-    lv_obj_t *tile_settings = lv_tileview_add_tile(tv, 4, 0, LV_DIR_HOR);
+    lv_obj_t *tile_set_b    = lv_tileview_add_tile(tv, 4, 0, LV_DIR_HOR | LV_DIR_BOTTOM);
+    lv_obj_t *tile_set_v    = lv_tileview_add_tile(tv, 4, 1, LV_DIR_VER);
+    lv_obj_t *tile_set_c    = lv_tileview_add_tile(tv, 4, 2, LV_DIR_VER);
+    lv_obj_t *tile_set_w    = lv_tileview_add_tile(tv, 4, 3, LV_DIR_TOP);
     lv_obj_t *tile_debug    = lv_tileview_add_tile(tv, 5, 0, LV_DIR_LEFT);
 
     face_actions_create(tile_actions);
@@ -115,7 +120,7 @@ void ui_init(void)
     face_clock_create(tile_clock);
     face_aura_create(tile_aura);
     face_timer_create(tile_timer);
-    face_settings_create(tile_settings);
+    face_settings_create(tile_set_b, tile_set_v, tile_set_c, tile_set_w);
     face_debug_create(tile_debug);
 
     wf_screentime_init(&screentime);
@@ -133,7 +138,16 @@ void ui_tick(void)
     face_clock_tick();
     face_actions_tick();
     face_notif_tick();
-    face_aura_tick();
+    /* The aura repaints a full-screen canvas each tick — only pay that cost
+     * while it is actually on screen, or it throttles the whole UI. We test the
+     * tile's real coordinates rather than lv_tileview_get_tile_act(), which is
+     * not updated reliably by touch-driven scrolling on device. */
+    if (tile_aura) {
+        lv_area_t a;
+        lv_obj_get_coords(tile_aura, &a);
+        if (a.x1 < UI_W && a.x2 >= 0 && a.y1 < UI_H && a.y2 >= 0)
+            face_aura_tick();
+    }
     face_timer_tick();
     face_debug_tick();
     power_tick();
@@ -158,6 +172,11 @@ void ui_show_face(int idx)
     };
     if (!tv || idx < 0 || idx >= (int)(sizeof(POS) / sizeof(POS[0]))) return;
     lv_tileview_set_tile_by_index(tv, POS[idx].col, POS[idx].row, LV_ANIM_OFF);
+}
+
+void ui_goto_tile(int col, int row)
+{
+    if (tv) lv_tileview_set_tile_by_index(tv, col, row, LV_ANIM_OFF);
 }
 
 void ui_apply_accent(void)

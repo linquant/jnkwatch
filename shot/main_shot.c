@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <string.h>
 
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
@@ -36,14 +37,20 @@ int main(int argc, char **argv)
 {
     const char *out = (argc > 1) ? argv[1] : "frame.png";
 
-    int face = (argc > 2) ? atoi(argv[2]) : 0;
+    /* argv[2] is a face index, or "col,row" to preview a raw tileview cell. */
+    int face = 0, col = -1, row = 0;
+    if (argc > 2) {
+        if (strchr(argv[2], ',')) sscanf(argv[2], "%d,%d", &col, &row);
+        else face = atoi(argv[2]);
+    }
     if (argc > 3) theme_set_accent((accent_t)atoi(argv[3])); /* teinte 0..5 */
 
     lv_init();
     lv_tick_set_cb(watch_millis);
     watch_display_init();
     ui_init();
-    ui_show_face(face);
+    if (col >= 0) ui_goto_tile(col, row);
+    else ui_show_face(face);
 
     /* Let a few frames settle, then force a full refresh into the framebuffer. */
     for (int i = 0; i < 3; i++) {

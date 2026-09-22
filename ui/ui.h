@@ -15,6 +15,10 @@ void ui_tick(void);
  * the clock; the rest of the strip is horizontal. */
 void ui_show_face(int idx);
 
+/* Jump directly to a raw tileview cell (col,row) — used by the shot tool to
+ * preview sub-screens that aren't a top-level face index. */
+void ui_goto_tile(int col, int row);
+
 /* Cumulative time the screen has been lit, total uptime (ms), and the on ratio
  * (%). Surfaced on the debug face. */
 unsigned long ui_screen_on_ms(void);

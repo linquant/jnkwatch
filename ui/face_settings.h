@@ -3,8 +3,10 @@
 
 #include <stdbool.h>
 
-/* Settings face: brightness slider + lift-to-wake switch. */
-void face_settings_create(lv_obj_t *parent);
+/* Settings face, split into four vertical sub-screens — one parent tile each:
+ * brightness, sleep timeout, accent colours, wrist wake. */
+void face_settings_create(lv_obj_t *bright, lv_obj_t *sleep,
+                          lv_obj_t *color, lv_obj_t *wrist);
 
 /* Current lift-to-wake preference (read by the power manager). */
 bool face_settings_wrist_wake(void);
