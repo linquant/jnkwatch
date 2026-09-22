@@ -16,12 +16,11 @@ any hardware is involved.
 
 ## Features
 
-- **7 swipeable faces** in an `lv_tileview` — a horizontal strip plus a vertical pair:
-  `actions | notifications | [clock ⇅ aura] | timer | compass | settings`.
+- **6 swipeable faces** in an `lv_tileview` — a horizontal strip plus a vertical pair:
+  `actions | notifications | [clock ⇅ aura] | timer | settings`.
 - **Dual-display clock** (Casio-style): big LCD time + status column (date, battery,
   weather placeholder, activity placeholder, unread bell).
 - **Aura** living watchface: a motion-reactive particle field (energy from the IMU).
-- **Compass** with a graduated rose (heading is mocked on PC; needs a magnetometer on HW).
 - **Countdown timer** with a depleting ring and touch controls.
 - **Notifications**: a latest-notification card (tap to dismiss & advance); an unread
   **bell** appears on the clock. Fed by a BLE stand-in on PC.
@@ -78,7 +77,7 @@ git submodule update --init --recursive
 ./shot.sh frame.png <face> <teinte>   # headless: render one face to a PNG
 ./test.sh                       # run the Unity/CTest suite
 ```
-`<face>`: 0=actions 1=notifications 2=clock 3=aura 4=timer 5=compass 6=settings.
+`<face>`: 0=actions 1=notifications 2=clock 3=aura 4=timer 5=settings.
 `<teinte>`: 0..5 (Rose, Vert, Cyan, Violet, Or, Bleu).
 
 The UI reads the clock through the `watch_time()`/`watch_now()` HAL, so renders

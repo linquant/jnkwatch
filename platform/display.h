@@ -22,10 +22,6 @@ uint32_t watch_millis(void);
 /* Battery charge, 0..100%. Mocked on PC; reads the ADC on real hardware. */
 int watch_battery_pct(void);
 
-/* Compass heading in degrees (0=N, 90=E). Mocked on PC. On hardware: from a
- * magnetometer (true north) or gyro-integrated (relative, drifts). */
-double watch_heading_deg(void);
-
 /* Set display backlight, 10..100%. No-op on PC (the sim dims via an overlay);
  * on hardware, drive the backlight GPIO with LEDC PWM. */
 void watch_set_backlight(int pct);

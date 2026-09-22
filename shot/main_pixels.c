@@ -12,18 +12,19 @@
 
 #define THRESH 12 /* max-channel value at/below which a pixel counts as black */
 
-static const char *FACE_NAME[7] = {
-    "actions", "notif", "clock", "aura", "timer", "compass", "settings"
+#define NFACE 6
+static const char *FACE_NAME[NFACE] = {
+    "actions", "notif", "clock", "aura", "timer", "settings"
 };
 
 /* Per-face lit-fraction budget (%). Calibrated from measured values + margin
- * (measured 2026-09-22: actions 25, notif 5.5, clock 6.3, aura 5.3, timer 22.7,
- * compass 7.6, settings 11.6). The guard exists to catch a big regression
- * (e.g. a bright background → lit ~100%), so budgets keep comfortable headroom;
- * aura is animated (moving particles), hence looser. */
-static const double BUDGET[7] = {
+ * (measured 2026-09-22: actions 25, notif 5.5, clock 5.6, aura 4.6, timer 22.7,
+ * settings 11.6). The guard exists to catch a big regression (e.g. a bright
+ * background → lit ~100%), so budgets keep comfortable headroom; aura is
+ * animated (moving particles), hence looser. */
+static const double BUDGET[NFACE] = {
     /*actions*/ 32.0, /*notif*/ 12.0, /*clock*/ 12.0, /*aura*/ 16.0,
-    /*timer*/ 30.0, /*compass*/ 15.0, /*settings*/ 18.0
+    /*timer*/ 30.0, /*settings*/ 18.0
 };
 
 static void face_stats(int face, wf_pix_stats_t *s)
@@ -49,7 +50,7 @@ int main(int argc, char **argv)
     else       printf("Face pixel usage (round panel, thresh=%d)\n", THRESH);
 
     int fail = 0;
-    for (int f = 0; f < 7; f++) {
+    for (int f = 0; f < NFACE; f++) {
         wf_pix_stats_t s;
         face_stats(f, &s);
         double litpct = s.lit_ratio * 100.0;

@@ -9,7 +9,7 @@ void ui_init(void);
 void ui_tick(void);
 
 /* Jump to a face by index
- * (0=actions, 1=notifications, 2=clock, 3=aura, 4=timer, 5=compass, 6=settings).
+ * (0=actions, 1=notifications, 2=clock, 3=aura, 4=timer, 5=settings).
  * The UI boots on the clock (2); notifications then actions are swipes left.
  * Clock (2) and aura (3) share one horizontal slot — aura is a swipe DOWN from
  * the clock; the rest of the strip is horizontal. */

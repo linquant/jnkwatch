@@ -6,7 +6,6 @@
 #include "face_notif.h"
 #include "face_aura.h"
 #include "face_timer.h"
-#include "face_compass.h"
 #include "face_settings.h"
 #include "display.h"   /* watch_set_backlight(), watch_read_accel() */
 #include "wrist.h"
@@ -77,7 +76,7 @@ void ui_init(void)
     lv_obj_set_style_bg_color(tv, COL_BG, 0);
     lv_obj_set_style_bg_opa(tv, LV_OPA_COVER, 0);
 
-    /* Horizontal strip: actions | notif | clock | timer | compass | settings.
+    /* Horizontal strip: actions | notif | clock | timer | settings.
      * The two TIME watchfaces (clock + aura) share ONE horizontal slot (col 2):
      * clock on top, aura stacked below it — swipe UP/DOWN to switch between the
      * two, swipe LEFT/RIGHT to move along the strip. Clock is the boot face. */
@@ -86,15 +85,13 @@ void ui_init(void)
     lv_obj_t *tile_clock    = lv_tileview_add_tile(tv, 2, 0, LV_DIR_HOR | LV_DIR_BOTTOM);
     lv_obj_t *tile_aura     = lv_tileview_add_tile(tv, 2, 1, LV_DIR_TOP);
     lv_obj_t *tile_timer    = lv_tileview_add_tile(tv, 3, 0, LV_DIR_HOR);
-    lv_obj_t *tile_compass  = lv_tileview_add_tile(tv, 4, 0, LV_DIR_HOR);
-    lv_obj_t *tile_settings = lv_tileview_add_tile(tv, 5, 0, LV_DIR_LEFT);
+    lv_obj_t *tile_settings = lv_tileview_add_tile(tv, 4, 0, LV_DIR_LEFT);
 
     face_actions_create(tile_actions);
     face_notif_create(tile_notif);
     face_clock_create(tile_clock);
     face_aura_create(tile_aura);
     face_timer_create(tile_timer);
-    face_compass_create(tile_compass);
     face_settings_create(tile_settings);
 
     /* Land on the clock (col 2, row 0). */
@@ -106,13 +103,12 @@ void ui_init(void)
 void ui_tick(void)
 {
     /* Every face ticks each frame so the timer keeps running in the
-     * background and the compass stays live regardless of the shown face. */
+     * background regardless of the shown face. */
     face_clock_tick();
     face_actions_tick();
     face_notif_tick();
     face_aura_tick();
     face_timer_tick();
-    face_compass_tick();
     power_tick();
 
     /* Seeing the notifications face clears the clock's unread bell. */
@@ -130,8 +126,7 @@ void ui_show_face(int idx)
         {2, 0}, /* 2 clock         */
         {2, 1}, /* 3 aura          */
         {3, 0}, /* 4 timer         */
-        {4, 0}, /* 5 compass       */
-        {5, 0}, /* 6 settings      */
+        {4, 0}, /* 5 settings      */
     };
     if (!tv || idx < 0 || idx >= (int)(sizeof(POS) / sizeof(POS[0]))) return;
     lv_tileview_set_tile_by_index(tv, POS[idx].col, POS[idx].row, LV_ANIM_OFF);
@@ -139,13 +134,11 @@ void ui_show_face(int idx)
 
 void ui_apply_accent(void)
 {
-    /* Push the current teinte to every face so they stay harmonised. Aura and
-     * the compass rose recolour themselves in their tick; these hold the
-     * statically-coloured widgets. */
+    /* Push the current teinte to every face so they stay harmonised. Aura
+     * recolours itself in its tick; these hold the statically-coloured widgets. */
     face_clock_apply_accent();
     face_actions_apply_accent();
     face_notif_apply_accent();
     face_timer_apply_accent();
-    face_compass_apply_accent();
     face_settings_apply_accent();
 }

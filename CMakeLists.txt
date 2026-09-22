@@ -24,13 +24,11 @@ set(SHARED_SRC
   ui/face_notif.c
   ui/face_actions.c
   ui/face_timer.c
-  ui/face_compass.c
   ui/face_settings.c
   ui/face_aura.c
   core/watchface_logic.c
   core/dotfont.c
   core/timer.c
-  core/compass.c
   core/settings.c
   core/wrist.c
   core/activity.c
@@ -84,17 +82,6 @@ target_include_directories(test_timer PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/third_party/unity/src)
 target_compile_definitions(test_timer PRIVATE UNITY_INCLUDE_DOUBLE)
 add_test(NAME timer COMMAND test_timer)
-
-add_executable(test_compass
-  tests/test_compass.c
-  core/compass.c
-  third_party/unity/src/unity.c)
-target_include_directories(test_compass PRIVATE
-  ${CMAKE_CURRENT_SOURCE_DIR}/core
-  ${CMAKE_CURRENT_SOURCE_DIR}/third_party/unity/src)
-target_compile_definitions(test_compass PRIVATE UNITY_INCLUDE_DOUBLE)
-target_link_libraries(test_compass m)
-add_test(NAME compass COMMAND test_compass)
 
 add_executable(test_settings
   tests/test_settings.c

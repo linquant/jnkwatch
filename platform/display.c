@@ -45,13 +45,6 @@ int watch_battery_pct(void)
     return 68;
 }
 
-double watch_heading_deg(void)
-{
-    /* PC mock: a slow, steady rotation so the compass visibly moves.
-     * On hardware, replace with magnetometer (or gyro-integrated) heading. */
-    return (double)((watch_millis() / 40) % 360);
-}
-
 void watch_set_backlight(int pct)
 {
     /* PC: no real backlight (the sim shows brightness with a dim overlay).

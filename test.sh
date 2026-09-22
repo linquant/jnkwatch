@@ -6,7 +6,7 @@ cmake -S . -B build >/dev/null
 # Build every registered test binary (not just one) so ctest never runs a
 # stale/missing binary after a source change.
 cmake --build build -j"$(nproc)" \
-  --target test_watchface_logic test_dotfont test_timer test_compass \
+  --target test_watchface_logic test_dotfont test_timer \
            test_settings test_wrist test_activity test_notify test_actions \
            test_pixelstats watch_pixels >/dev/null
 ctest --test-dir build --output-on-failure
