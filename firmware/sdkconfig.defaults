@@ -36,3 +36,17 @@ CONFIG_LV_FONT_MONTSERRAT_48=y
 CONFIG_LV_FONT_DEFAULT_MONTSERRAT_28=y
 # LVGL uses the ESP heap (PSRAM-capable)
 CONFIG_LV_USE_STDLIB_MALLOC_BUILTIN=y
+
+# Bluetooth Low Energy — NimBLE host (companion-app GATT server)
+CONFIG_BT_ENABLED=y
+CONFIG_BT_NIMBLE_ENABLED=y
+CONFIG_BT_NIMBLE_ROLE_PERIPHERAL=y
+CONFIG_BT_NIMBLE_ROLE_BROADCASTER=y
+# We are peripheral-only: no central/observer roles
+# CONFIG_BT_NIMBLE_ROLE_CENTRAL is not set
+# CONFIG_BT_NIMBLE_ROLE_OBSERVER is not set
+# Bonding + persistent keys in NVS (encrypted config link)
+CONFIG_BT_NIMBLE_NVS_PERSIST=y
+
+# WiFi is unused by this app — free the RAM/flash and avoid BLE/WiFi coexistence
+# CONFIG_ESP_WIFI_ENABLED is not set

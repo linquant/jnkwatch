@@ -34,12 +34,21 @@ static void update_bright_label(void)
     lv_label_set_text(bright_val, b);
 }
 
+/* Report the current config to the platform so the phone (BLE) stays in sync
+ * and the value is persisted. Called only on genuine user interaction. */
+static void notify_change(void)
+{
+    watch_settings_changed(cfg.brightness, cfg.sleep_ms, cfg.wrist_wake,
+                           (int)theme_get_accent());
+}
+
 static void on_brightness(lv_event_t *e)
 {
     (void)e;
     wf_settings_set_brightness(&cfg, lv_slider_get_value(slider));
     update_bright_label();
     ui_apply_brightness(cfg.brightness);
+    notify_change();
 }
 
 static void on_wrist(lv_event_t *e)
@@ -48,6 +57,7 @@ static void on_wrist(lv_event_t *e)
     bool on = lv_obj_has_state(sw, LV_STATE_CHECKED);
     wf_settings_set_wrist_wake(&cfg, on);
     watch_set_wrist_wake(on);
+    notify_change();
 }
 
 static void on_dot(lv_event_t *e)
@@ -55,6 +65,7 @@ static void on_dot(lv_event_t *e)
     int i = (int)(intptr_t)lv_obj_get_user_data(lv_event_get_current_target(e));
     theme_set_accent((accent_t)i);
     ui_apply_accent();   /* re-tints every face, including these swatches */
+    notify_change();
 }
 
 static void on_sleep(lv_event_t *e)
@@ -62,10 +73,29 @@ static void on_sleep(lv_event_t *e)
     int i = (int)(intptr_t)lv_obj_get_user_data(lv_event_get_current_target(e));
     wf_settings_set_sleep_ms(&cfg, SLEEP_VAL[i]);
     update_sleep_sel();
+    notify_change();
 }
 
 bool face_settings_wrist_wake(void) { return cfg.wrist_wake; }
 int  face_settings_sleep_ms(void)   { return cfg.sleep_ms; }
+int  face_settings_brightness(void) { return cfg.brightness; }
+
+void face_settings_apply_config(int brightness, int sleep_ms, bool wrist_wake)
+{
+    wf_settings_set_brightness(&cfg, brightness);
+    wf_settings_set_sleep_ms(&cfg, sleep_ms);
+    wf_settings_set_wrist_wake(&cfg, wrist_wake);
+    /* Reflect into the widgets. lv_*_set_value / state changes do NOT emit
+     * LV_EVENT_VALUE_CHANGED, so this never loops back through on_* handlers. */
+    lv_slider_set_value(slider, cfg.brightness, LV_ANIM_OFF);
+    update_bright_label();
+    if (cfg.wrist_wake) lv_obj_add_state(sw, LV_STATE_CHECKED);
+    else                lv_obj_remove_state(sw, LV_STATE_CHECKED);
+    update_sleep_sel();
+    /* Apply the hardware effects. */
+    ui_apply_brightness(cfg.brightness);
+    watch_set_wrist_wake(cfg.wrist_wake);
+}
 
 void face_settings_apply_accent(void)
 {

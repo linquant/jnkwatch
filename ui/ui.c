@@ -131,8 +131,28 @@ void ui_init(void)
     wf_wrist_init(&wrist);
 }
 
+/* Apply configuration pushed from the phone (BLE), drained off the write side. */
+static void config_tick(void)
+{
+    wf_config_msg_t m;
+    while (watch_poll_config(&m)) {
+        switch (m.kind) {
+        case WF_CFG_SETTINGS:
+            face_settings_apply_config(m.brightness, m.sleep_ms, m.wrist_wake);
+            theme_set_accent((accent_t)m.accent);
+            ui_apply_accent();
+            break;
+        case WF_CFG_ACTION_CLEAR:
+        case WF_CFG_ACTION_SET:
+            /* Wired in Phase 2 (needs face_actions apply hooks). */
+            break;
+        }
+    }
+}
+
 void ui_tick(void)
 {
+    config_tick();
     /* Every face ticks each frame so the timer keeps running in the
      * background regardless of the shown face. */
     face_clock_tick();

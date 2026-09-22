@@ -21,6 +21,9 @@
 #include "touch_ft3168.h"
 #include "rtc_pcf85063.h"
 #include "imu_qmi8658.h"
+#include "config_store.h"
+#include "device_hal.h"
+#include "ble_server.h"
 #include "display.h"   /* WATCH_SIZE */
 #include "ui.h"
 
@@ -168,6 +171,10 @@ void app_main(void)
 {
     ESP_LOGI(TAG, "boot");
 
+    /* NVS + inbound-config queue first (NVS is also needed by BLE bonding). */
+    device_hal_init();
+    config_store_init();
+
     /* Touch first, like the Waveshare demo: the FT3168 reset is tied to the
      * OLED_RESET line (GPIO21), so bringing touch up BEFORE the LCD lets the
      * panel's own reset pulse also reset the touch and leave it freshly
@@ -240,6 +247,22 @@ void app_main(void)
     lv_indev_set_display(touch, s_disp);
 
     ui_init();
+
+    /* Apply the persisted config on first UI tick (enqueue before the task runs). */
+    {
+        wf_stored_config_t c;
+        config_store_get(&c);
+        wf_config_msg_t m = {
+            .kind = WF_CFG_SETTINGS, .brightness = c.brightness,
+            .sleep_ms = c.sleep_ms, .wrist_wake = c.wrist_wake, .accent = c.accent,
+        };
+        device_config_enqueue(&m);
+    }
+
     xTaskCreate(lvgl_task, "lvgl", 8 * 1024, NULL, 3, NULL);
-    ESP_LOGI(TAG, "UI up (%dx%d), touch ready", LCD_H, LCD_V);
+
+    /* Companion-app BLE GATT server (advertises as JNKWatch). */
+    ble_server_start();
+
+    ESP_LOGI(TAG, "UI up (%dx%d), touch ready, BLE up", LCD_H, LCD_V);
 }

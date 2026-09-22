@@ -119,6 +119,20 @@ void watch_send_action(unsigned action_id)
     (void)action_id;
 }
 
+int watch_poll_config(wf_config_msg_t *out)
+{
+    /* PC: no phone, so no inbound config. On hardware the BLE task feeds this. */
+    (void)out;
+    return 0;
+}
+
+void watch_settings_changed(int brightness, int sleep_ms, bool wrist_wake, int accent)
+{
+    /* PC: nothing to sync/persist. On hardware: update the BLE Settings
+     * characteristic (notify the phone) and persist to NVS. */
+    (void)brightness; (void)sleep_ms; (void)wrist_wake; (void)accent;
+}
+
 time_t watch_time(void)
 {
     /* PC: host clock, overridable via $WATCH_EPOCH for deterministic shots.
