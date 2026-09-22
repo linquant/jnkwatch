@@ -35,7 +35,8 @@ set(SHARED_SRC
   core/wrist.c
   core/activity.c
   core/notify.c
-  core/actions.c)
+  core/actions.c
+  core/pixelstats.c)
 set(SHARED_INC
   ${CMAKE_CURRENT_SOURCE_DIR}/platform
   ${CMAKE_CURRENT_SOURCE_DIR}/ui
@@ -46,6 +47,11 @@ set(SHARED_INC
 add_executable(watch_shot shot/main_shot.c ${SHARED_SRC})
 target_include_directories(watch_shot PRIVATE ${SHARED_INC})
 target_link_libraries(watch_shot lvgl m)
+
+# --- Headless target: per-face black/lit pixel ratio (AMOLED budget) ---
+add_executable(watch_pixels shot/main_pixels.c ${SHARED_SRC})
+target_include_directories(watch_pixels PRIVATE ${SHARED_INC})
+target_link_libraries(watch_pixels lvgl m)
 
 # --- Unit tests (pure logic, no LVGL/SDL needed) ---
 enable_testing()
@@ -138,6 +144,19 @@ target_include_directories(test_actions PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/core
   ${CMAKE_CURRENT_SOURCE_DIR}/third_party/unity/src)
 add_test(NAME actions COMMAND test_actions)
+
+add_executable(test_pixelstats
+  tests/test_pixelstats.c
+  core/pixelstats.c
+  third_party/unity/src/unity.c)
+target_include_directories(test_pixelstats PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/core
+  ${CMAKE_CURRENT_SOURCE_DIR}/third_party/unity/src)
+target_compile_definitions(test_pixelstats PRIVATE UNITY_INCLUDE_DOUBLE)
+add_test(NAME pixelstats COMMAND test_pixelstats)
+
+# AMOLED lit-pixel budget guard (renders each face; fails if over budget).
+add_test(NAME amoled_budget COMMAND watch_pixels --check)
 
 # --- Interactive target: SDL2 window (only built if SDL2 is installed) ---
 find_package(SDL2 QUIET)

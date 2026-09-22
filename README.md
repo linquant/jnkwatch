@@ -87,6 +87,10 @@ can be pinned for deterministic screenshots:
 WATCH_EPOCH=$(date -d "2026-09-22 10:09:42" +%s) ./shot.sh clock.png 2 2
 ```
 
+`./pixels.sh` reports the black/lit pixel ratio per face (an AMOLED-power proxy);
+`./pixels.sh --check` (also run in CI as the `amoled_budget` test) fails if any
+face lights too many pixels — a guard against a bright background regressing.
+
 ## Test-driven development
 
 Logic lives in `core/` with **no LVGL/SDL dependency**, so it runs as fast host unit
