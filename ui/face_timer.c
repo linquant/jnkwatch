@@ -191,7 +191,7 @@ void face_timer_create(lv_obj_t *p)
     lv_arc_set_range(ring, 0, RING_MAX);
     lv_arc_set_value(ring, RING_MAX);
     lv_obj_remove_style(ring, NULL, LV_PART_KNOB);
-    lv_obj_clear_flag(ring, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_remove_flag(ring, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
     lv_obj_set_style_arc_width(ring, 5, LV_PART_MAIN);
     lv_obj_set_style_arc_color(ring, COL_TRACK, LV_PART_MAIN);
     lv_obj_set_style_arc_width(ring, 9, LV_PART_INDICATOR);
