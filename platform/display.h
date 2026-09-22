@@ -6,6 +6,7 @@
 #include "notify.h"
 #include <stdint.h>
 #include <stdbool.h>
+#include <time.h>
 
 #define WATCH_SIZE 466 /* ESP32-S3-Touch-AMOLED-1.43 is 466x466 (round) */
 
@@ -47,3 +48,12 @@ int watch_poll_notification(wf_notif_t *out);
  * button as feedback); on hardware, send action_id to the phone over BLE
  * (a GATT characteristic the companion app subscribes to). */
 void watch_send_action(unsigned action_id);
+
+/* Current wall-clock time as an epoch. On PC it is the host clock, but can be
+ * pinned via the $WATCH_EPOCH env var (seconds) for deterministic screenshots.
+ * On hardware, read the PCF85063 RTC. The UI must use this instead of libc
+ * time() so it stays platform-independent and testable. */
+time_t watch_time(void);
+
+/* Broken-down LOCAL time, filled from watch_time(). */
+void watch_now(struct tm *out);

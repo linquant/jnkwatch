@@ -171,11 +171,8 @@ void face_clock_create(lv_obj_t *p)
 
 void face_clock_tick(void)
 {
-    struct timespec tp;
-    clock_gettime(CLOCK_REALTIME, &tp);
-    time_t secs = tp.tv_sec;
     struct tm lt;
-    localtime_r(&secs, &lt);
+    watch_now(&lt);
 
     static int last_min = -1;
     if (lt.tm_min != last_min) {

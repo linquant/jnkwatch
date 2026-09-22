@@ -2,6 +2,7 @@
 #include <time.h>
 #include <math.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 /* Full-screen render buffer (LVGL renders the whole frame here in FULL mode). */
 static uint16_t g_frame[WATCH_SIZE * WATCH_SIZE];
@@ -109,7 +110,7 @@ int watch_poll_notification(wf_notif_t *out)
     snprintf(out->app, sizeof(out->app), "%s", feed[i].app);
     snprintf(out->title, sizeof(out->title), "%s", feed[i].title);
     snprintf(out->body, sizeof(out->body), "%s", feed[i].body);
-    out->ts = (long)time(NULL);
+    out->ts = (long)watch_time();
     out->id = 0; /* the store assigns the real id on push */
 
     /* First 3 arrive together (like a backlog sync on connect); the rest drip
@@ -123,4 +124,19 @@ void watch_send_action(unsigned action_id)
     /* PC: nothing to send (the sim flashes the pressed button as feedback).
      * On hardware: write action_id to the phone over BLE (GATT). */
     (void)action_id;
+}
+
+time_t watch_time(void)
+{
+    /* PC: host clock, overridable via $WATCH_EPOCH for deterministic shots.
+     * On hardware: read the PCF85063 RTC (I2C 0x51) and convert to epoch. */
+    const char *e = getenv("WATCH_EPOCH");
+    if (e && *e) return (time_t)strtoll(e, NULL, 10);
+    return time(NULL);
+}
+
+void watch_now(struct tm *out)
+{
+    time_t t = watch_time();
+    localtime_r(&t, out);
 }

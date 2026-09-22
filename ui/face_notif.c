@@ -165,7 +165,7 @@ static void render_current(void)
     lv_label_set_text(body_lbl, n->body);
 
     char t[16];
-    wf_notif_reltime(t, sizeof(t), (long)time(NULL), n->ts);
+    wf_notif_reltime(t, sizeof(t), (long)watch_time(), n->ts);
     lv_label_set_text(time_lbl, t);
 
     /* Footer: position when several are stacked (tap to see the next). */

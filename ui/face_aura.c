@@ -126,9 +126,8 @@ void face_aura_tick(void)
     lv_obj_set_style_text_color(date_lbl, col, 0);
 
     static int last_min = -1;
-    time_t now = time(NULL);
     struct tm lt;
-    localtime_r(&now, &lt);
+    watch_now(&lt);
     if (lt.tm_min != last_min) {
         last_min = lt.tm_min;
         char t[8], d[12], buf[20];

@@ -81,6 +81,12 @@ git submodule update --init --recursive
 `<face>`: 0=actions 1=notifications 2=clock 3=aura 4=timer 5=compass 6=settings.
 `<teinte>`: 0..5 (Rose, Vert, Cyan, Violet, Or, Bleu).
 
+The UI reads the clock through the `watch_time()`/`watch_now()` HAL, so renders
+can be pinned for deterministic screenshots:
+```sh
+WATCH_EPOCH=$(date -d "2026-09-22 10:09:42" +%s) ./shot.sh clock.png 2 2
+```
+
 ## Test-driven development
 
 Logic lives in `core/` with **no LVGL/SDL dependency**, so it runs as fast host unit
