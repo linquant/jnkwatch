@@ -12,19 +12,18 @@
 
 #define THRESH 12 /* max-channel value at/below which a pixel counts as black */
 
-#define NFACE 6
+#define NFACE 7
 static const char *FACE_NAME[NFACE] = {
-    "actions", "notif", "clock", "aura", "timer", "settings"
+    "actions", "notif", "clock", "aura", "timer", "settings", "debug"
 };
 
-/* Per-face lit-fraction budget (%). Calibrated from measured values + margin
- * (measured 2026-09-22: actions 25, notif 5.5, clock 5.6, aura 4.6, timer 22.7,
- * settings 11.6). The guard exists to catch a big regression (e.g. a bright
- * background → lit ~100%), so budgets keep comfortable headroom; aura is
- * animated (moving particles), hence looser. */
+/* Per-face lit-fraction budget (%). Calibrated from measured values + margin.
+ * The guard exists to catch a big regression (e.g. a bright background →
+ * lit ~100%), so budgets keep comfortable headroom; aura is animated (moving
+ * particles), hence looser. */
 static const double BUDGET[NFACE] = {
     /*actions*/ 32.0, /*notif*/ 12.0, /*clock*/ 12.0, /*aura*/ 16.0,
-    /*timer*/ 30.0, /*settings*/ 18.0
+    /*timer*/ 30.0, /*settings*/ 18.0, /*debug*/ 14.0
 };
 
 static void face_stats(int face, wf_pix_stats_t *s)

@@ -7,8 +7,10 @@
 #include "face_aura.h"
 #include "face_timer.h"
 #include "face_settings.h"
-#include "display.h"   /* watch_set_backlight(), watch_read_accel() */
+#include "face_debug.h"
+#include "display.h"   /* watch_set_backlight(), watch_read_accel(), watch_millis() */
 #include "wrist.h"
+#include "screentime.h"
 #include "lvgl.h"
 
 #define SLEEP_MS 6000  /* screen sleeps after this much inactivity */
@@ -19,6 +21,7 @@ static lv_obj_t *tile_notif; /* tracked so we can clear unread when shown */
 static lv_obj_t *dim_overlay;
 static lv_obj_t *sleep_overlay;
 static wf_wrist_t wrist;
+static wf_screentime_t screentime; /* time the screen has been lit vs uptime */
 
 /* Sleep the screen after inactivity; wake on user input or a wrist raise. */
 static void power_tick(void)
@@ -42,7 +45,20 @@ static void power_tick(void)
     }
     bool asleep = lv_display_get_inactive_time(disp) > SLEEP_MS;
     lv_obj_set_style_bg_opa(sleep_overlay, asleep ? LV_OPA_COVER : LV_OPA_TRANSP, 0);
+
+    /* Accumulate screen-on time (screen counts as "on" when not asleep). */
+    static uint32_t st_last = 0;
+    static int st_started = 0;
+    uint32_t now = watch_millis();
+    unsigned dt = st_started ? (unsigned)(now - st_last) : 0;
+    st_last = now;
+    st_started = 1;
+    wf_screentime_update(&screentime, dt, !asleep);
 }
+
+unsigned long ui_screen_on_ms(void) { return screentime.on_ms; }
+unsigned long ui_uptime_ms(void)    { return screentime.total_ms; }
+int           ui_screen_on_pct(void) { return wf_screentime_on_pct(&screentime); }
 
 void ui_apply_brightness(int pct)
 {
@@ -76,7 +92,7 @@ void ui_init(void)
     lv_obj_set_style_bg_color(tv, COL_BG, 0);
     lv_obj_set_style_bg_opa(tv, LV_OPA_COVER, 0);
 
-    /* Horizontal strip: actions | notif | clock | timer | settings.
+    /* Horizontal strip: actions | notif | clock | timer | settings | debug.
      * The two TIME watchfaces (clock + aura) share ONE horizontal slot (col 2):
      * clock on top, aura stacked below it — swipe UP/DOWN to switch between the
      * two, swipe LEFT/RIGHT to move along the strip. Clock is the boot face. */
@@ -85,7 +101,8 @@ void ui_init(void)
     lv_obj_t *tile_clock    = lv_tileview_add_tile(tv, 2, 0, LV_DIR_HOR | LV_DIR_BOTTOM);
     lv_obj_t *tile_aura     = lv_tileview_add_tile(tv, 2, 1, LV_DIR_TOP);
     lv_obj_t *tile_timer    = lv_tileview_add_tile(tv, 3, 0, LV_DIR_HOR);
-    lv_obj_t *tile_settings = lv_tileview_add_tile(tv, 4, 0, LV_DIR_LEFT);
+    lv_obj_t *tile_settings = lv_tileview_add_tile(tv, 4, 0, LV_DIR_HOR);
+    lv_obj_t *tile_debug    = lv_tileview_add_tile(tv, 5, 0, LV_DIR_LEFT);
 
     face_actions_create(tile_actions);
     face_notif_create(tile_notif);
@@ -93,6 +110,9 @@ void ui_init(void)
     face_aura_create(tile_aura);
     face_timer_create(tile_timer);
     face_settings_create(tile_settings);
+    face_debug_create(tile_debug);
+
+    wf_screentime_init(&screentime);
 
     /* Land on the clock (col 2, row 0). */
     lv_tileview_set_tile_by_index(tv, 2, 0, LV_ANIM_OFF);
@@ -109,6 +129,7 @@ void ui_tick(void)
     face_notif_tick();
     face_aura_tick();
     face_timer_tick();
+    face_debug_tick();
     power_tick();
 
     /* Seeing the notifications face clears the clock's unread bell. */
@@ -127,6 +148,7 @@ void ui_show_face(int idx)
         {2, 1}, /* 3 aura          */
         {3, 0}, /* 4 timer         */
         {4, 0}, /* 5 settings      */
+        {5, 0}, /* 6 debug         */
     };
     if (!tv || idx < 0 || idx >= (int)(sizeof(POS) / sizeof(POS[0]))) return;
     lv_tileview_set_tile_by_index(tv, POS[idx].col, POS[idx].row, LV_ANIM_OFF);
@@ -141,4 +163,5 @@ void ui_apply_accent(void)
     face_notif_apply_accent();
     face_timer_apply_accent();
     face_settings_apply_accent();
+    face_debug_apply_accent();
 }

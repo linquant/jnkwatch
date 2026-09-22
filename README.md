@@ -77,7 +77,7 @@ git submodule update --init --recursive
 ./shot.sh frame.png <face> <teinte>   # headless: render one face to a PNG
 ./test.sh                       # run the Unity/CTest suite
 ```
-`<face>`: 0=actions 1=notifications 2=clock 3=aura 4=timer 5=settings.
+`<face>`: 0=actions 1=notifications 2=clock 3=aura 4=timer 5=settings 6=debug.
 `<teinte>`: 0..5 (Rose, Vert, Cyan, Violet, Or, Bleu).
 
 The UI reads the clock through the `watch_time()`/`watch_now()` HAL, so renders

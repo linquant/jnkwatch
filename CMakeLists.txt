@@ -25,6 +25,7 @@ set(SHARED_SRC
   ui/face_actions.c
   ui/face_timer.c
   ui/face_settings.c
+  ui/face_debug.c
   ui/face_aura.c
   core/watchface_logic.c
   core/dotfont.c
@@ -34,7 +35,8 @@ set(SHARED_SRC
   core/activity.c
   core/notify.c
   core/actions.c
-  core/pixelstats.c)
+  core/pixelstats.c
+  core/screentime.c)
 set(SHARED_INC
   ${CMAKE_CURRENT_SOURCE_DIR}/platform
   ${CMAKE_CURRENT_SOURCE_DIR}/ui
@@ -141,6 +143,15 @@ target_include_directories(test_pixelstats PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/third_party/unity/src)
 target_compile_definitions(test_pixelstats PRIVATE UNITY_INCLUDE_DOUBLE)
 add_test(NAME pixelstats COMMAND test_pixelstats)
+
+add_executable(test_screentime
+  tests/test_screentime.c
+  core/screentime.c
+  third_party/unity/src/unity.c)
+target_include_directories(test_screentime PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/core
+  ${CMAKE_CURRENT_SOURCE_DIR}/third_party/unity/src)
+add_test(NAME screentime COMMAND test_screentime)
 
 # AMOLED lit-pixel budget guard (renders each face; fails if over budget).
 add_test(NAME amoled_budget COMMAND watch_pixels --check)
