@@ -9,12 +9,12 @@ import android.bluetooth.BluetoothGattDescriptor
 import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothProfile
 import android.bluetooth.le.ScanCallback
-import android.bluetooth.le.ScanFilter
 import android.bluetooth.le.ScanResult
 import android.bluetooth.le.ScanSettings
 import android.content.Context
 import android.os.Build
-import android.os.ParcelUuid
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import fr.ponera.jnkwatch.model.WatchSettings
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -89,23 +89,38 @@ class WatchBleClient(private val context: Context) {
         gatt = null
         _state.value = ConnState.SCANNING
         logMsg("Recherche de JNKWatch…")
-        val filter = ScanFilter.Builder()
-            .setServiceUuid(ParcelUuid(BleUuids.SERVICE))
-            .build()
+        // Scan without a filter and match by name (the service UUID sits in the
+        // scan response, which Android filters unreliably); the name is in the
+        // primary advertisement.
         val settings = ScanSettings.Builder()
             .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
             .build()
-        scanner?.startScan(listOf(filter), settings, scanCb)
+        scanner?.startScan(null, settings, scanCb)
+        // Give up after 15 s so a failed scan doesn't hang (auto-reconnect retries).
+        handler.postDelayed(scanTimeout, 15_000)
     }
 
-    private val scanCb = object : ScanCallback() {
+    private val handler: Handler = Handler(Looper.getMainLooper())
+    private val scanTimeout: Runnable = Runnable {
+        if (_state.value == ConnState.SCANNING) {
+            try { scanner?.stopScan(scanCb) } catch (_: Exception) {}
+            logMsg("Montre non trouvée")
+            _state.value = ConnState.DISCONNECTED
+        }
+    }
+
+    private val scanCb: ScanCallback = object : ScanCallback() {
         override fun onScanResult(callbackType: Int, result: ScanResult) {
-            val dev = result.device
             if (_state.value != ConnState.SCANNING) return
-            logMsg("Trouvée: ${dev.name ?: dev.address}")
+            val rec = result.scanRecord
+            val name = rec?.deviceName ?: result.device.name
+            val hasSvc = rec?.serviceUuids?.any { it.uuid == BleUuids.SERVICE } == true
+            if (name != BleUuids.DEVICE_NAME && !hasSvc) return
+            handler.removeCallbacks(scanTimeout)
             scanner?.stopScan(this)
+            logMsg("Trouvée: ${name ?: result.device.address}")
             _state.value = ConnState.CONNECTING
-            gatt = dev.connectGatt(context, false, gattCb, BluetoothDevice.TRANSPORT_LE)
+            gatt = result.device.connectGatt(context, false, gattCb, BluetoothDevice.TRANSPORT_LE)
         }
 
         override fun onScanFailed(errorCode: Int) {
