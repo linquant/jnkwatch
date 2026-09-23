@@ -90,10 +90,16 @@ class WatchService : Service() {
             .setSmallIcon(android.R.drawable.stat_sys_data_bluetooth)
             .setOngoing(true)
             .build()
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            startForeground(1, notif, ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE)
-        } else {
-            startForeground(1, notif)
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                startForeground(1, notif, ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE)
+            } else {
+                startForeground(1, notif)
+            }
+        } catch (e: Exception) {
+            // Never let a foreground-service quirk crash the app; the direct
+            // connection still works, only background forwarding is degraded.
+            runCatching { startForeground(1, notif) }
         }
     }
 

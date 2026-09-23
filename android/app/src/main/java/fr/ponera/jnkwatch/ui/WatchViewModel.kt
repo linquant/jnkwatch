@@ -17,18 +17,25 @@ class WatchViewModel(app: Application) : AndroidViewModel(app) {
     val lastAction = client.lastAction
     val log = client.log
 
-    /** Connecting starts the foreground service, which owns the connection and
-     *  the SMS/call forwarding. */
+    /** Connect the shared client directly (proven path), and start the
+     *  foreground service for background SMS/call forwarding (best-effort — a
+     *  service failure must never block the connection itself). */
     fun connect() {
-        ContextCompat.startForegroundService(
-            getApplication(), Intent(getApplication(), WatchService::class.java)
-        )
+        client.connect()
+        runCatching {
+            ContextCompat.startForegroundService(
+                getApplication(), Intent(getApplication(), WatchService::class.java)
+            )
+        }
     }
 
     fun disconnect() {
-        getApplication<Application>().stopService(
-            Intent(getApplication(), WatchService::class.java)
-        )
+        runCatching {
+            getApplication<Application>().stopService(
+                Intent(getApplication(), WatchService::class.java)
+            )
+        }
+        client.disconnect()
     }
 
     fun update(s: WatchSettings) = client.writeSettings(s)

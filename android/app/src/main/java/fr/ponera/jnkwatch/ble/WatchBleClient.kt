@@ -82,7 +82,11 @@ class WatchBleClient(private val context: Context) {
 
     fun connect() {
         if (adapter?.isEnabled != true) { logMsg("Bluetooth désactivé"); return }
-        if (_state.value != ConnState.DISCONNECTED) return
+        if (_state.value == ConnState.CONNECTED) return
+        // Restart cleanly even if a previous scan/attempt got stuck.
+        try { scanner?.stopScan(scanCb) } catch (_: Exception) {}
+        try { gatt?.close() } catch (_: Exception) {}
+        gatt = null
         _state.value = ConnState.SCANNING
         logMsg("Recherche de JNKWatch…")
         val filter = ScanFilter.Builder()
