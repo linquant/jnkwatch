@@ -25,6 +25,8 @@ object ActionsPrefs {
                     icon = o.optInt("icon", 8),
                     enabled = o.optBoolean("enabled"),
                     url = o.optString("url"),
+                    body = o.optString("body"),
+                    contentType = o.optString("contentType", "application/json"),
                 )
             }
             if (list.size == ActionButton.COUNT) list else ActionButton.defaults()
@@ -43,6 +45,8 @@ object ActionsPrefs {
                     .put("icon", it.icon)
                     .put("enabled", it.enabled)
                     .put("url", it.url)
+                    .put("body", it.body)
+                    .put("contentType", it.contentType)
             )
         }
         prefs(ctx).edit().putString(KEY, arr.toString()).apply()

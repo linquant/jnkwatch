@@ -68,7 +68,7 @@ class WatchService : Service() {
         scope.launch {
             WatchConnection.client.actionEvents.collect { id ->
                 val b = ActionsPrefs.buttonForId(applicationContext, id) ?: return@collect
-                ActionRunner.post(b.url, b.id, b.label)
+                ActionRunner.post(b.url, b.id, b.label, b.body, b.contentType)
             }
         }
         // Re-push the button config on each (re)connect, so a watch reboot keeps

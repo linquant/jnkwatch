@@ -9,6 +9,10 @@ data class ActionButton(
     val icon: Int = 8,        // WF_ICON_GENERIC
     val enabled: Boolean = false,
     val url: String = "",
+    /** POST body. Blank = default `{"button":id,"label":label}`. The tokens
+     * {id} and {label} are substituted at send time. */
+    val body: String = "",
+    val contentType: String = "application/json",
 ) {
     companion object {
         const val COUNT = 6   // one 2x3 page on the watch

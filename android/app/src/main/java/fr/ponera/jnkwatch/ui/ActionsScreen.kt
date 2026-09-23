@@ -118,6 +118,25 @@ private fun ButtonCard(index: Int, button: ActionButton, onChange: (ActionButton
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )
+            OutlinedTextField(
+                value = button.body,
+                onValueChange = { onChange(button.copy(body = it)) },
+                label = { Text("Corps (vide = JSON auto)") },
+                placeholder = { Text("{\"action\":\"on\",\"btn\":{id}}") },
+                minLines = 2,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            OutlinedTextField(
+                value = button.contentType,
+                onValueChange = { onChange(button.copy(contentType = it.trim())) },
+                label = { Text("Content-Type") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Text(
+                "Jetons : {id} = numéro du bouton, {label} = nom.",
+                color = Color(0xFF6B777D), fontSize = 12.sp,
+            )
         }
     }
 }
