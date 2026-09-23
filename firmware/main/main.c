@@ -131,6 +131,9 @@ static void clock_init(void)
 
     struct tm rt;
     bool valid = rtc_pcf85063_get(&rt);
+#if defined(WATCH_SET_RTC_EPOCH) && defined(WATCH_FORCE_RTC)
+    valid = false;   /* one-shot: force a reseed from the build epoch over USB */
+#endif
     if (!valid) {
         /* Fresh chip or power was lost: seed from the build epoch so the watch
          * still shows a sane recent time until it is set properly. */

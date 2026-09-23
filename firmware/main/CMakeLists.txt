@@ -21,3 +21,8 @@ target_compile_definitions(${COMPONENT_LIB} PRIVATE LV_LVGL_H_INCLUDE_SIMPLE=1)
 if(WATCH_SET_RTC_EPOCH)
     target_compile_definitions(${COMPONENT_LIB} PRIVATE WATCH_SET_RTC_EPOCH=${WATCH_SET_RTC_EPOCH})
 endif()
+# -DWATCH_FORCE_RTC=1 (with the epoch) force-seeds even a valid RTC: a one-shot
+# way to set the clock over USB. Follow with a clean build to stop reseeding.
+if(WATCH_FORCE_RTC)
+    target_compile_definitions(${COMPONENT_LIB} PRIVATE WATCH_FORCE_RTC=1)
+endif()
