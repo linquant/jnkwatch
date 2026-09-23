@@ -41,6 +41,7 @@ static const ble_uuid128_t notifclr_uuid  = JNK_UUID128(0x04);
 static const ble_uuid128_t actioncfg_uuid = JNK_UUID128(0x05);
 static const ble_uuid128_t actionevt_uuid = JNK_UUID128(0x06);
 static const ble_uuid128_t status_uuid    = JNK_UUID128(0x07);
+static const ble_uuid128_t weather_uuid   = JNK_UUID128(0x08);
 
 static uint8_t  s_addr_type;
 static uint16_t s_conn = BLE_HS_CONN_HANDLE_NONE;
@@ -222,6 +223,28 @@ static int dsc_access(uint16_t c, uint16_t a, struct ble_gatt_access_ctxt *ctxt,
           .access_cb = dsc_access, .arg = (void *)(name) }, \
         { 0 } }
 
+/* Weather (W): [temp int16 LE][cond u8][location UTF-8 NUL]. */
+static int weather_access(uint16_t c, uint16_t a, struct ble_gatt_access_ctxt *ctxt, void *arg)
+{
+    (void)c; (void)a; (void)arg;
+    if (ctxt->op != BLE_GATT_ACCESS_OP_WRITE_CHR) return BLE_ATT_ERR_UNLIKELY;
+    uint8_t b[64];
+    uint16_t len = 0;
+    if (ble_hs_mbuf_to_flat(ctxt->om, b, sizeof(b) - 1, &len) != 0 || len < 3)
+        return BLE_ATT_ERR_INVALID_ATTR_VALUE_LEN;
+    b[len] = '\0';
+    wf_config_msg_t m = { .kind = WF_CFG_WEATHER };
+    m.temp_c = (int16_t)(b[0] | (b[1] << 8));   /* LE, signed */
+    m.cond = b[2];
+    size_t loclen = strlen((const char *)&b[3]);
+    if (loclen >= sizeof(m.location)) loclen = sizeof(m.location) - 1;
+    memcpy(m.location, &b[3], loclen);
+    m.location[loclen] = '\0';
+    device_config_enqueue(&m);
+    ESP_LOGI(TAG, "weather: %dC cond=%d loc='%s'", m.temp_c, m.cond, m.location);
+    return 0;
+}
+
 static const struct ble_gatt_svc_def gatt_svcs[] = {
     {
         .type = BLE_GATT_SVC_TYPE_PRIMARY,
@@ -271,6 +294,12 @@ static const struct ble_gatt_svc_def gatt_svcs[] = {
                 .access_cb = status_access,
                 .flags = BLE_GATT_CHR_F_READ | BLE_GATT_CHR_F_NOTIFY,
                 .descriptors = CUD("Status"),
+            },
+            {
+                .uuid = &weather_uuid.u,
+                .access_cb = weather_access,
+                .flags = BLE_GATT_CHR_F_WRITE,
+                .descriptors = CUD("Weather"),
             },
             { 0 },
         },

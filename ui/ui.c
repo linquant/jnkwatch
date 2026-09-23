@@ -152,6 +152,9 @@ static void config_tick(void)
         case WF_CFG_NOTIF_CLEAR:
             face_notif_clear();
             break;
+        case WF_CFG_WEATHER:
+            face_clock_set_weather(m.temp_c, m.cond, m.location);
+            break;
         }
     }
 }

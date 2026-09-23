@@ -128,8 +128,23 @@ bool watch_is_charging(void)
 
 int watch_poll_config(wf_config_msg_t *out)
 {
-    /* PC: no phone, so no inbound config. On hardware the BLE task feeds this. */
-    (void)out;
+    /* PC: no phone. For headless shots, inject one weather reading from
+     * $WATCH_WX="temp,cond,location" (e.g. "14,4,Paris"). */
+    static int wx_done = 0;
+    if (!wx_done) {
+        wx_done = 1;
+        const char *e = getenv("WATCH_WX");
+        if (e && *e) {
+            int temp = 0, cond = 0;
+            char loc[24] = "";
+            sscanf(e, "%d,%d,%23[^\n]", &temp, &cond, loc);
+            out->kind = WF_CFG_WEATHER;
+            out->temp_c = temp;
+            out->cond = cond;
+            snprintf(out->location, sizeof(out->location), "%s", loc);
+            return 1;
+        }
+    }
     return 0;
 }
 

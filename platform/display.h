@@ -61,6 +61,7 @@ typedef enum {
     WF_CFG_ACTION_CLEAR,   /* wipe the action-button set                  */
     WF_CFG_ACTION_SET,     /* set one action button (index/id/icon/...)   */
     WF_CFG_NOTIF_CLEAR,    /* clear the notification store                */
+    WF_CFG_WEATHER,        /* current weather from the phone              */
 } wf_config_kind_t;
 
 typedef struct {
@@ -76,6 +77,10 @@ typedef struct {
     int      icon;         /* 0..WF_ICON_COUNT-1          */
     bool     enabled;
     char     label[16];
+    /* WF_CFG_WEATHER */
+    int      temp_c;       /* whole degrees Celsius       */
+    int      cond;         /* wf_wx_cond_t (0..6)         */
+    char     location[24];
 } wf_config_msg_t;
 
 /* Dequeue one pending config message. Returns 1 and fills *out, else 0. */

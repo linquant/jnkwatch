@@ -34,6 +34,7 @@ Base UUID family `6a4e01NN-9b7a-4f2c-8d61-2a1b3c4d5e6f` ("6a4e" = 'j','N').
 | ActionCfg | `6a4e0105-` | Write | 1 or 20 |
 | ActionEvent | `6a4e0106-` | Notify | 4 |
 | Status | `6a4e0107-` | Read, Notify | 3 |
+| Weather | `6a4e0108-` | Write | var |
 
 ### Settings — `6a4e0101` (R / W / Notify), 4 bytes
 Mirrors `wf_settings_t` + accent. Write applies **and persists** (NVS); read
@@ -86,6 +87,19 @@ The phone maps it to a phone-side effect (Phase 5).
 | 0 | battery | u8 | 0–100 (`watch_battery_pct`) |
 | 1 | fw_major | u8 | firmware version |
 | 2 | fw_minor | u8 | firmware version |
+
+### Weather — `6a4e0108` (W), variable
+Current weather, fetched by the phone (the watch never fetches — no WiFi) and
+shown on the clock's weather row.
+
+| Offset | Field | Type | Notes |
+|-------:|-------|------|-------|
+| 0 | temp | int16 LE | whole degrees Celsius (signed) |
+| 2 | cond | u8 | 0 clear, 1 partly, 2 cloudy, 3 fog, 4 rain, 5 snow, 6 storm |
+| 3 | location | UTF-8 | city name, NUL-terminated (truncated to 23 bytes) |
+
+The phone maps the Open-Meteo WMO `weather_code` to `cond`: 0→clear; 1,2→partly;
+3→cloudy; 45,48→fog; 51–67/80–82→rain; 71–77/85,86→snow; 95,96,99→storm.
 
 ## Typical session
 1. App scans for `JNKWatch`, connects, bonds, negotiates MTU 247.

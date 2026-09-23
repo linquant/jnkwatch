@@ -10,3 +10,7 @@ void face_clock_tick(void);
 
 /* Re-apply the current accent teinte to this face. */
 void face_clock_apply_accent(void);
+
+/* Set the weather shown on the clock (pushed from the phone over BLE). cond is
+ * a wf_wx_cond_t (0..6); location is a short city name. */
+void face_clock_set_weather(int temp_c, int cond, const char *location);

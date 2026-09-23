@@ -36,7 +36,8 @@ set(SHARED_SRC
   core/notify.c
   core/actions.c
   core/pixelstats.c
-  core/screentime.c)
+  core/screentime.c
+  core/weather.c)
 set(SHARED_INC
   ${CMAKE_CURRENT_SOURCE_DIR}/platform
   ${CMAKE_CURRENT_SOURCE_DIR}/ui
@@ -124,6 +125,15 @@ target_include_directories(test_notify PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/core
   ${CMAKE_CURRENT_SOURCE_DIR}/third_party/unity/src)
 add_test(NAME notify COMMAND test_notify)
+
+add_executable(test_weather
+  tests/test_weather.c
+  core/weather.c
+  third_party/unity/src/unity.c)
+target_include_directories(test_weather PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/core
+  ${CMAKE_CURRENT_SOURCE_DIR}/third_party/unity/src)
+add_test(NAME weather COMMAND test_weather)
 
 add_executable(test_actions
   tests/test_actions.c
