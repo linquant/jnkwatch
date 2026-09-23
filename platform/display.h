@@ -55,6 +55,7 @@ typedef enum {
     WF_CFG_SETTINGS = 1,   /* brightness / sleep_ms / wrist_wake / accent */
     WF_CFG_ACTION_CLEAR,   /* wipe the action-button set                  */
     WF_CFG_ACTION_SET,     /* set one action button (index/id/icon/...)   */
+    WF_CFG_NOTIF_CLEAR,    /* clear the notification store                */
 } wf_config_kind_t;
 
 typedef struct {

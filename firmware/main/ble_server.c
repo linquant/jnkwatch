@@ -3,10 +3,14 @@
  * See docs/ble-protocol.md for the wire contract. Runs on its own host task —
  * writes are handed to the LVGL side via device_config_enqueue(). */
 #include "ble_server.h"
-#include "device_hal.h"     /* device_config_enqueue, wf_config_msg_t */
+#include "device_hal.h"     /* device_config_enqueue, device_notif_enqueue */
 #include "config_store.h"
+#include "rtc_pcf85063.h"
+#include "notify.h"         /* wf_notif_t + field lengths */
 
 #include <string.h>
+#include <time.h>
+#include <sys/time.h>
 #include "esp_log.h"
 #include "nvs_flash.h"
 
@@ -26,12 +30,22 @@ static const char *TAG = "ble";
     0x6f, 0x5e, 0x4d, 0x3c, 0x1b, 0x2a, 0x61, 0x8d, \
     0x2c, 0x4f, 0x7a, 0x9b, (nn), 0x01, 0x4e, 0x6a)
 
-static const ble_uuid128_t svc_uuid      = JNK_UUID128(0x00);
-static const ble_uuid128_t settings_uuid = JNK_UUID128(0x01);
+#define FW_MAJOR 1
+#define FW_MINOR 0
+
+static const ble_uuid128_t svc_uuid       = JNK_UUID128(0x00);
+static const ble_uuid128_t settings_uuid  = JNK_UUID128(0x01);
+static const ble_uuid128_t time_uuid      = JNK_UUID128(0x02);
+static const ble_uuid128_t notifpush_uuid = JNK_UUID128(0x03);
+static const ble_uuid128_t notifclr_uuid  = JNK_UUID128(0x04);
+static const ble_uuid128_t actioncfg_uuid = JNK_UUID128(0x05);
+static const ble_uuid128_t actionevt_uuid = JNK_UUID128(0x06);
+static const ble_uuid128_t status_uuid    = JNK_UUID128(0x07);
 
 static uint8_t  s_addr_type;
 static uint16_t s_conn = BLE_HS_CONN_HANDLE_NONE;
 static uint16_t s_settings_val_handle;
+static uint16_t s_action_val_handle;
 
 static int  gap_event(struct ble_gap_event *event, void *arg);
 static void advertise(void);
@@ -82,6 +96,131 @@ static int settings_access(uint16_t conn_handle, uint16_t attr_handle,
     }
 }
 
+/* Time (W): u64 LE epoch seconds UTC → RTC + system clock. */
+static int time_access(uint16_t c, uint16_t a, struct ble_gatt_access_ctxt *ctxt, void *arg)
+{
+    (void)c; (void)a; (void)arg;
+    if (ctxt->op != BLE_GATT_ACCESS_OP_WRITE_CHR) return BLE_ATT_ERR_UNLIKELY;
+    uint8_t b[8];
+    uint16_t len = 0;
+    if (ble_hs_mbuf_to_flat(ctxt->om, b, sizeof(b), &len) != 0 || len < 8)
+        return BLE_ATT_ERR_INVALID_ATTR_VALUE_LEN;
+    uint64_t epoch = 0;
+    for (int i = 0; i < 8; i++) epoch |= (uint64_t)b[i] << (8 * i);
+    struct tm g;
+    time_t t = (time_t)epoch;
+    gmtime_r(&t, &g);
+    rtc_pcf85063_set(&g);                 /* RTC holds UTC */
+    struct timeval tv = { .tv_sec = t };
+    settimeofday(&tv, NULL);
+    ESP_LOGI(TAG, "time set: epoch=%llu", (unsigned long long)epoch);
+    return 0;
+}
+
+/* NotifPush (W): variable UTF-8, NUL-separated "app\0title\0body". The watch
+ * timestamps it with its own clock and truncates each field (wf_notif_push). */
+static const char *nul_field(const char *buf, int buflen, int *pos)
+{
+    if (*pos >= buflen) return "";
+    const char *s = buf + *pos;
+    int l = (int)strnlen(s, buflen - *pos);
+    *pos += l + 1;
+    return s;   /* buffer is NUL-terminated by the caller */
+}
+
+static int notifpush_access(uint16_t c, uint16_t a, struct ble_gatt_access_ctxt *ctxt, void *arg)
+{
+    (void)c; (void)a; (void)arg;
+    if (ctxt->op != BLE_GATT_ACCESS_OP_WRITE_CHR) return BLE_ATT_ERR_UNLIKELY;
+    char b[256];
+    uint16_t len = 0;
+    if (ble_hs_mbuf_to_flat(ctxt->om, b, sizeof(b) - 1, &len) != 0 || len == 0)
+        return BLE_ATT_ERR_INVALID_ATTR_VALUE_LEN;
+    b[len] = '\0';
+
+    int pos = 0;
+    const char *app   = nul_field(b, len, &pos);
+    const char *title = nul_field(b, len, &pos);
+    const char *body  = nul_field(b, len, &pos);
+
+    wf_notif_t n = {0};
+    snprintf(n.app,   sizeof(n.app),   "%s", app);
+    snprintf(n.title, sizeof(n.title), "%s", title);
+    snprintf(n.body,  sizeof(n.body),  "%s", body);
+    n.ts = (long)time(NULL);
+    device_notif_enqueue(&n);
+    return 0;
+}
+
+/* NotifClear (W): any value clears the store. */
+static int notifclr_access(uint16_t c, uint16_t a, struct ble_gatt_access_ctxt *ctxt, void *arg)
+{
+    (void)c; (void)a; (void)arg;
+    if (ctxt->op != BLE_GATT_ACCESS_OP_WRITE_CHR) return BLE_ATT_ERR_UNLIKELY;
+    wf_config_msg_t m = { .kind = WF_CFG_NOTIF_CLEAR };
+    device_config_enqueue(&m);
+    return 0;
+}
+
+/* ActionCfg (W): op=0 clear; op=1 set {index,id,icon,enabled,label[12]}. */
+static int actioncfg_access(uint16_t c, uint16_t a, struct ble_gatt_access_ctxt *ctxt, void *arg)
+{
+    (void)c; (void)a; (void)arg;
+    if (ctxt->op != BLE_GATT_ACCESS_OP_WRITE_CHR) return BLE_ATT_ERR_UNLIKELY;
+    uint8_t b[20];
+    uint16_t len = 0;
+    if (ble_hs_mbuf_to_flat(ctxt->om, b, sizeof(b), &len) != 0 || len < 1)
+        return BLE_ATT_ERR_INVALID_ATTR_VALUE_LEN;
+    if (b[0] == 0x00) {
+        wf_config_msg_t m = { .kind = WF_CFG_ACTION_CLEAR };
+        device_config_enqueue(&m);
+        return 0;
+    }
+    if (b[0] == 0x01 && len >= 20) {
+        wf_config_msg_t m = { .kind = WF_CFG_ACTION_SET };
+        m.index = b[1];
+        memcpy(&m.action_id, b + 2, 4);
+        m.icon = b[6];
+        m.enabled = b[7] != 0;
+        memcpy(m.label, b + 8, 12);
+        m.label[12] = '\0';
+        device_config_enqueue(&m);
+        return 0;
+    }
+    return BLE_ATT_ERR_INVALID_ATTR_VALUE_LEN;
+}
+
+/* ActionEvent is notify-only; a read/write is never permitted. */
+static int evt_access(uint16_t c, uint16_t a, struct ble_gatt_access_ctxt *ctxt, void *arg)
+{
+    (void)c; (void)a; (void)ctxt; (void)arg;
+    return BLE_ATT_ERR_UNLIKELY;
+}
+
+/* Status (R/notify): battery u8 + fw major/minor. */
+static int status_access(uint16_t c, uint16_t a, struct ble_gatt_access_ctxt *ctxt, void *arg)
+{
+    (void)c; (void)a; (void)arg;
+    if (ctxt->op != BLE_GATT_ACCESS_OP_READ_CHR) return BLE_ATT_ERR_UNLIKELY;
+    uint8_t b[3] = { (uint8_t)watch_battery_pct(), FW_MAJOR, FW_MINOR };
+    return os_mbuf_append(ctxt->om, b, sizeof(b)) == 0 ? 0 : BLE_ATT_ERR_INSUFFICIENT_RES;
+}
+
+/* Characteristic User Description (0x2901): a human-readable name so tools like
+ * nRF Connect show "Time" etc. instead of a bare UUID. The name is passed as arg. */
+static int dsc_access(uint16_t c, uint16_t a, struct ble_gatt_access_ctxt *ctxt, void *arg)
+{
+    (void)c; (void)a;
+    const char *name = (const char *)arg;
+    return os_mbuf_append(ctxt->om, name, strlen(name)) == 0
+               ? 0 : BLE_ATT_ERR_INSUFFICIENT_RES;
+}
+
+#define CUD(name) (struct ble_gatt_dsc_def[]){ \
+        { .uuid = BLE_UUID16_DECLARE(0x2901), .att_flags = BLE_ATT_F_READ, \
+          .access_cb = dsc_access, .arg = (void *)(name) }, \
+        { 0 } }
+
 static const struct ble_gatt_svc_def gatt_svcs[] = {
     {
         .type = BLE_GATT_SVC_TYPE_PRIMARY,
@@ -94,6 +233,45 @@ static const struct ble_gatt_svc_def gatt_svcs[] = {
                          BLE_GATT_CHR_F_NOTIFY | BLE_GATT_CHR_F_READ_ENC |
                          BLE_GATT_CHR_F_WRITE_ENC,
                 .val_handle = &s_settings_val_handle,
+                .descriptors = CUD("Settings"),
+            },
+            {
+                .uuid = &time_uuid.u,
+                .access_cb = time_access,
+                .flags = BLE_GATT_CHR_F_WRITE | BLE_GATT_CHR_F_WRITE_ENC,
+                .descriptors = CUD("Time (epoch u64 LE)"),
+            },
+            {
+                .uuid = &notifpush_uuid.u,
+                .access_cb = notifpush_access,
+                .flags = BLE_GATT_CHR_F_WRITE | BLE_GATT_CHR_F_WRITE_ENC,
+                .descriptors = CUD("Notification push"),
+            },
+            {
+                .uuid = &notifclr_uuid.u,
+                .access_cb = notifclr_access,
+                .flags = BLE_GATT_CHR_F_WRITE | BLE_GATT_CHR_F_WRITE_ENC,
+                .descriptors = CUD("Notification clear"),
+            },
+            {
+                .uuid = &actioncfg_uuid.u,
+                .access_cb = actioncfg_access,
+                .flags = BLE_GATT_CHR_F_WRITE | BLE_GATT_CHR_F_WRITE_ENC,
+                .descriptors = CUD("Action config"),
+            },
+            {
+                .uuid = &actionevt_uuid.u,
+                .access_cb = evt_access,
+                .flags = BLE_GATT_CHR_F_NOTIFY,
+                .val_handle = &s_action_val_handle,
+                .descriptors = CUD("Action event"),
+            },
+            {
+                .uuid = &status_uuid.u,
+                .access_cb = status_access,
+                .flags = BLE_GATT_CHR_F_READ | BLE_GATT_CHR_F_NOTIFY |
+                         BLE_GATT_CHR_F_READ_ENC,
+                .descriptors = CUD("Status"),
             },
             { 0 },
         },
@@ -110,6 +288,15 @@ void ble_settings_notify(int brightness, int sleep_ms, bool wrist_wake, int acce
     };
     struct os_mbuf *om = ble_hs_mbuf_from_flat(buf, sizeof(buf));
     if (om) ble_gatts_notify_custom(s_conn, s_settings_val_handle, om);
+}
+
+void ble_action_notify(unsigned action_id)
+{
+    if (s_conn == BLE_HS_CONN_HANDLE_NONE) return;
+    uint8_t buf[4];
+    for (int i = 0; i < 4; i++) buf[i] = (uint8_t)(action_id >> (8 * i));
+    struct os_mbuf *om = ble_hs_mbuf_from_flat(buf, sizeof(buf));
+    if (om) ble_gatts_notify_custom(s_conn, s_action_val_handle, om);
 }
 
 static void advertise(void)

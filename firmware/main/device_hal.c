@@ -11,12 +11,14 @@
 #include "freertos/queue.h"
 #include <time.h>
 
-/* Inbound config from the BLE task, drained on the LVGL thread. */
+/* Inbound queues from the BLE task, drained on the LVGL thread. */
 static QueueHandle_t s_config_q;
+static QueueHandle_t s_notif_q;
 
 void device_hal_init(void)
 {
     s_config_q = xQueueCreate(8, sizeof(wf_config_msg_t));
+    s_notif_q  = xQueueCreate(8, sizeof(wf_notif_t));
 }
 
 void device_config_enqueue(const wf_config_msg_t *m)
@@ -27,6 +29,11 @@ void device_config_enqueue(const wf_config_msg_t *m)
 int watch_poll_config(wf_config_msg_t *out)
 {
     return (s_config_q && xQueueReceive(s_config_q, out, 0) == pdTRUE) ? 1 : 0;
+}
+
+void device_notif_enqueue(const wf_notif_t *n)
+{
+    if (s_notif_q) xQueueSend(s_notif_q, n, 0);
 }
 
 void watch_settings_changed(int brightness, int sleep_ms, bool wrist_wake, int accent)
@@ -65,13 +72,12 @@ void watch_read_accel(double *ax, double *ay, double *az)
 
 int watch_poll_notification(wf_notif_t *out)
 {
-    (void)out;
-    return 0; /* TODO(M3): BLE ANCS/GATT */
+    return (s_notif_q && xQueueReceive(s_notif_q, out, 0) == pdTRUE) ? 1 : 0;
 }
 
 void watch_send_action(unsigned action_id)
 {
-    (void)action_id; /* TODO(M3): BLE GATT */
+    ble_action_notify(action_id);  /* notify the phone over GATT */
 }
 
 void watch_set_backlight(int pct)

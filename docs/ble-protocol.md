@@ -27,7 +27,7 @@ Base UUID family `6a4e01NN-9b7a-4f2c-8d61-2a1b3c4d5e6f` ("6a4e" = 'j','N').
 | **Service** | `6a4e0100-` | — | — |
 | Settings | `6a4e0101-` | Read, Write, Notify | 4 |
 | Time | `6a4e0102-` | Write | 8 |
-| NotifPush | `6a4e0103-` | Write | 190 |
+| NotifPush | `6a4e0103-` | Write | var |
 | NotifClear | `6a4e0104-` | Write | 1 |
 | ActionCfg | `6a4e0105-` | Write | 1 or 20 |
 | ActionEvent | `6a4e0106-` | Notify | 4 |
@@ -48,16 +48,12 @@ returns the live state; the watch **notifies** when the user changes it on-devic
 `u64` Unix epoch **seconds, UTC**. Watch sets the PCF85063 RTC + `settimeofday`.
 The watch applies its own timezone (`CET-1CEST,…`), so send UTC only.
 
-### NotifPush — `6a4e0103` (W), 190 bytes
-Fixed layout, matching `wf_notif_t` field sizes (`core/notify.h`). Pushed into
-the on-device store (keeps newest 8; the watch assigns the id).
-
-| Offset | Field | Type | Notes |
-|-------:|-------|------|-------|
-| 0 | app | char[18] | source app, e.g. "WhatsApp" (`WF_NOTIF_APP_LEN`) |
-| 18 | title | char[40] | sender / subject (`WF_NOTIF_TITLE_LEN`) |
-| 58 | body | char[128] | preview (`WF_NOTIF_BODY_LEN`) |
-| 186 | ts | u32 | epoch seconds; 0 → watch uses its own clock |
+### NotifPush — `6a4e0103` (W), variable
+Three UTF-8 strings separated by NUL bytes: `app\0title\0body` (a trailing NUL
+is fine). Pushed into the on-device store (keeps newest 8; the watch assigns
+the id and timestamps it with its own clock). Each field is truncated to the
+`wf_notif_t` limits (`core/notify.h`): app ≤17, title ≤39, body ≤127 bytes.
+Example bytes: `4D 65 73 73 00 48 69 00 59 6F 21 00` = "Mess\0Hi\0Yo!\0".
 
 ### NotifClear — `6a4e0104` (W), 1 byte
 Any value clears the notification store (`wf_notif_clear`).

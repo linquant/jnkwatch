@@ -40,6 +40,15 @@ void face_notif_mark_read(void)
 static void render_current(void);
 static void on_next(lv_event_t *e);
 
+void face_notif_clear(void)
+{
+    wf_notif_clear(&store);
+    newest_id = 0;
+    browse_idx = 0;
+    unread = 0;
+    render_current();
+}
+
 static lv_obj_t *make_row(lv_obj_t *p, int w, lv_flex_align_t main, int gap)
 {
     lv_obj_t *r = lv_obj_create(p);

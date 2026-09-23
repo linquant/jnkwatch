@@ -143,8 +143,14 @@ static void config_tick(void)
             ui_apply_accent();
             break;
         case WF_CFG_ACTION_CLEAR:
+            face_actions_apply_clear();
+            break;
         case WF_CFG_ACTION_SET:
-            /* Wired in Phase 2 (needs face_actions apply hooks). */
+            face_actions_apply_set(m.index, m.action_id, m.label,
+                                   m.icon, m.enabled);
+            break;
+        case WF_CFG_NOTIF_CLEAR:
+            face_notif_clear();
             break;
         }
     }
