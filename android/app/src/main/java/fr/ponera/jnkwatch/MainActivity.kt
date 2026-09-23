@@ -33,10 +33,11 @@ class MainActivity : ComponentActivity() {
         } else {
             perms += Manifest.permission.ACCESS_FINE_LOCATION
         }
-        // SMS + call forwarding
-        perms += Manifest.permission.RECEIVE_SMS
+        // Call forwarding
         perms += Manifest.permission.READ_PHONE_STATE
         perms += Manifest.permission.READ_CALL_LOG
+        // Weather (phone location)
+        perms += Manifest.permission.ACCESS_COARSE_LOCATION
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
             perms += Manifest.permission.POST_NOTIFICATIONS
 

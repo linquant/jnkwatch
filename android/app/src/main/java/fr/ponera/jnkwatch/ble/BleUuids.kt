@@ -15,6 +15,7 @@ object BleUuids {
     val ACTION_CFG: UUID = u(0x05)
     val ACTION_EVENT: UUID = u(0x06)
     val STATUS: UUID = u(0x07)
+    val WEATHER: UUID = u(0x08)
 
     /** Standard Client Characteristic Configuration Descriptor. */
     val CCCD: UUID = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")

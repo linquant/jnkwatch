@@ -233,6 +233,20 @@ class WatchBleClient(private val context: Context) {
         logMsg("Heure synchronisée")
     }
 
+    /** Push current weather: [temp int16 LE][cond u8][location NUL]. */
+    fun pushWeather(tempC: Int, cond: Int, location: String) {
+        if (_state.value != ConnState.CONNECTED) return
+        val out = java.io.ByteArrayOutputStream()
+        val t = tempC.coerceIn(-32768, 32767)
+        out.write(t and 0xFF)
+        out.write((t shr 8) and 0xFF)
+        out.write(cond and 0xFF)
+        out.write(location.take(23).toByteArray(Charsets.UTF_8))
+        out.write(0)
+        writeChar(BleUuids.WEATHER, out.toByteArray())
+        logMsg("Météo → $tempC°C $location")
+    }
+
     /** Push a phone notification: "app\0title\0body" (the watch truncates). */
     fun pushNotification(app: String, title: String, body: String) {
         if (_state.value != ConnState.CONNECTED) return

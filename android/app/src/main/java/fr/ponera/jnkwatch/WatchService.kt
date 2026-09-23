@@ -13,6 +13,7 @@ import androidx.core.app.NotificationCompat
 import fr.ponera.jnkwatch.ble.ConnState
 import fr.ponera.jnkwatch.ble.WatchConnection
 import fr.ponera.jnkwatch.notif.CallReceiver
+import fr.ponera.jnkwatch.weather.WeatherRepo
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -45,6 +46,20 @@ class WatchService : Service() {
                     delay(3000)
                     if (isActive) WatchConnection.client.connect()
                 }
+            }
+        }
+        // Weather: push shortly after each connect, then refresh every 30 min.
+        scope.launch {
+            var lastPush = 0L
+            while (isActive) {
+                val connected = WatchConnection.client.state.value == ConnState.CONNECTED
+                if (connected && System.currentTimeMillis() - lastPush > 30 * 60 * 1000L) {
+                    WeatherRepo.fetch(applicationContext)?.let {
+                        WatchConnection.client.pushWeather(it.tempC, it.cond, it.location)
+                        lastPush = System.currentTimeMillis()
+                    }
+                }
+                delay(15_000)
             }
         }
     }
