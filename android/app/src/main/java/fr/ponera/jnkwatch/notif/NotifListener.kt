@@ -29,6 +29,10 @@ class NotifListener : NotificationListenerService() {
             ?: extras.getCharSequence(Notification.EXTRA_BIG_TEXT))?.toString().orEmpty()
         if (title.isBlank() && text.isBlank()) return
 
+        // Discover the app (so it can be toggled) and honour the user's filter.
+        NotifPrefs.markSeen(this, sbn.packageName)
+        if (!NotifPrefs.isEnabled(this, sbn.packageName)) return
+
         WatchConnection.client.pushNotification(appLabel(sbn.packageName), title, text)
     }
 
