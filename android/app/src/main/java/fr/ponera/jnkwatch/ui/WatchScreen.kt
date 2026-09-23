@@ -49,6 +49,7 @@ fun WatchScreen(
     onNeedPermissions: () -> Unit,
     onOpenFilter: () -> Unit,
     onOpenActions: () -> Unit,
+    onOpenProbes: () -> Unit,
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
     val settings by vm.settings.collectAsStateWithLifecycle()
@@ -100,6 +101,13 @@ fun WatchScreen(
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text("Boutons d'action")
+        }
+
+        androidx.compose.material3.OutlinedButton(
+            onClick = onOpenProbes,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text("Sondes serveur (GET)")
         }
 
         // Notification access — needed to forward SMS/RCS/app messages.

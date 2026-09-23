@@ -15,10 +15,11 @@ import androidx.compose.runtime.setValue
 import fr.ponera.jnkwatch.ui.ActionsScreen
 import fr.ponera.jnkwatch.ui.JnkTheme
 import fr.ponera.jnkwatch.ui.NotifFilterScreen
+import fr.ponera.jnkwatch.ui.ProbesScreen
 import fr.ponera.jnkwatch.ui.WatchScreen
 import fr.ponera.jnkwatch.ui.WatchViewModel
 
-private enum class Screen { MAIN, FILTER, ACTIONS }
+private enum class Screen { MAIN, FILTER, ACTIONS, PROBES }
 
 class MainActivity : ComponentActivity() {
 
@@ -35,11 +36,13 @@ class MainActivity : ComponentActivity() {
                 when (screen) {
                     Screen.FILTER -> NotifFilterScreen(onBack = { screen = Screen.MAIN })
                     Screen.ACTIONS -> ActionsScreen(onBack = { screen = Screen.MAIN })
+                    Screen.PROBES -> ProbesScreen(onBack = { screen = Screen.MAIN })
                     Screen.MAIN -> WatchScreen(
                         vm,
                         onNeedPermissions = ::ensurePermissions,
                         onOpenFilter = { screen = Screen.FILTER },
                         onOpenActions = { screen = Screen.ACTIONS },
+                        onOpenProbes = { screen = Screen.PROBES },
                     )
                 }
             }

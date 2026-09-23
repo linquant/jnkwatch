@@ -15,6 +15,8 @@ import fr.ponera.jnkwatch.actions.ActionsPrefs
 import fr.ponera.jnkwatch.ble.ConnState
 import fr.ponera.jnkwatch.ble.WatchConnection
 import fr.ponera.jnkwatch.notif.CallReceiver
+import fr.ponera.jnkwatch.probes.GetProbesPrefs
+import fr.ponera.jnkwatch.probes.ProbeRunner
 import fr.ponera.jnkwatch.weather.WeatherRepo
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -69,6 +71,28 @@ class WatchService : Service() {
             WatchConnection.client.actionEvents.collect { id ->
                 val b = ActionsPrefs.buttonForId(applicationContext, id) ?: return@collect
                 ActionRunner.post(b.url, b.id, b.label, b.body, b.contentType)
+            }
+        }
+        // GET probes: poll each enabled endpoint on its interval and push any
+        // non-empty result to the watch's notification screen.
+        scope.launch {
+            val lastPoll = HashMap<Int, Long>()
+            while (isActive) {
+                if (WatchConnection.client.state.value == ConnState.CONNECTED) {
+                    val now = System.currentTimeMillis()
+                    for (p in GetProbesPrefs.load(applicationContext)) {
+                        if (!p.enabled || p.url.isBlank()) continue
+                        val period = p.intervalMin.coerceAtLeast(1) * 60_000L
+                        if (now - (lastPoll[p.id] ?: 0L) < period) continue
+                        lastPoll[p.id] = now
+                        val v = ProbeRunner.fetch(p).value
+                        if (!v.isNullOrBlank()) {
+                            val title = p.name.ifBlank { "Alerte" }
+                            WatchConnection.client.pushNotification(title, title, v)
+                        }
+                    }
+                }
+                delay(30_000)
             }
         }
         // Re-push the button config on each (re)connect, so a watch reboot keeps
