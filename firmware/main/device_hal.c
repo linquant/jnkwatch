@@ -7,6 +7,7 @@
 #include "config_store.h"
 #include "ble_server.h"
 #include "esp_timer.h"
+#include "driver/usb_serial_jtag.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
 #include <time.h>
@@ -62,6 +63,12 @@ void watch_now(struct tm *out)
 int watch_battery_pct(void)
 {
     return 76; /* TODO(M2): ADC1 ch3 + Li-ion curve */
+}
+
+bool watch_is_charging(void)
+{
+    /* USB Serial/JTAG connected to a host == plugged into USB (charging). */
+    return usb_serial_jtag_is_connected();
 }
 
 void watch_read_accel(double *ax, double *ay, double *az)

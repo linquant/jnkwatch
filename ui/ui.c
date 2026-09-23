@@ -49,7 +49,7 @@ static void power_tick(void)
      * by default but the accelerometer HAL is still stubbed, so it cannot yet
      * generate a real raise. */
     bool can_wake = lv_indev_get_next(NULL) != NULL;
-    bool asleep = can_wake &&
+    bool asleep = can_wake && !watch_is_charging() &&
         lv_display_get_inactive_time(disp) > (uint32_t)face_settings_sleep_ms();
     lv_obj_set_style_bg_opa(sleep_overlay, asleep ? LV_OPA_COVER : LV_OPA_TRANSP, 0);
 

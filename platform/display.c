@@ -119,6 +119,13 @@ void watch_send_action(unsigned action_id)
     (void)action_id;
 }
 
+bool watch_is_charging(void)
+{
+    /* PC: off unless $WATCH_CHARGING is set (for testing). */
+    const char *e = getenv("WATCH_CHARGING");
+    return e != NULL && *e != '\0' && *e != '0';
+}
+
 int watch_poll_config(wf_config_msg_t *out)
 {
     /* PC: no phone, so no inbound config. On hardware the BLE task feeds this. */

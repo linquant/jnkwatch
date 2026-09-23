@@ -22,6 +22,11 @@ uint32_t watch_millis(void);
 /* Battery charge, 0..100%. Mocked on PC; reads the ADC on real hardware. */
 int watch_battery_pct(void);
 
+/* True while the watch is on USB power (charging). On device: the native USB
+ * Serial/JTAG is connected to a host (a dumb charger without data won't count).
+ * Used to keep the screen awake while plugged in. PC: $WATCH_CHARGING. */
+bool watch_is_charging(void);
+
 /* Set display backlight, 10..100%. No-op on PC (the sim dims via an overlay);
  * on hardware, drive the backlight GPIO with LEDC PWM. */
 void watch_set_backlight(int pct);
