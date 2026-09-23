@@ -22,10 +22,17 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import fr.ponera.jnkwatch.notif.NotifAccess
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -74,6 +81,30 @@ fun WatchScreen(vm: WatchViewModel, onNeedPermissions: () -> Unit) {
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text(if (state == ConnState.DISCONNECTED) "Connecter" else "Déconnecter")
+        }
+
+        // Notification access — needed to forward SMS/RCS/app messages.
+        val context = LocalContext.current
+        var notifAccess by remember { mutableStateOf(NotifAccess.isGranted(context)) }
+        val lifecycleOwner = LocalLifecycleOwner.current
+        DisposableEffect(lifecycleOwner) {
+            val obs = LifecycleEventObserver { _, e ->
+                if (e == Lifecycle.Event.ON_RESUME) notifAccess = NotifAccess.isGranted(context)
+            }
+            lifecycleOwner.lifecycle.addObserver(obs)
+            onDispose { lifecycleOwner.lifecycle.removeObserver(obs) }
+        }
+        if (!notifAccess) {
+            Card(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text("Accès aux notifications requis pour transférer les SMS et messages.",
+                        color = Color(0xFFE7EEF2))
+                    Button(onClick = { NotifAccess.openSettings(context) },
+                        modifier = Modifier.fillMaxWidth()) {
+                        Text("Autoriser l'accès aux notifications")
+                    }
+                }
+            }
         }
 
         val s = settings

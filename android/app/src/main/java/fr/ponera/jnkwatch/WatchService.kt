@@ -8,13 +8,11 @@ import android.content.IntentFilter
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
-import android.provider.Telephony
 import android.telephony.TelephonyManager
 import androidx.core.app.NotificationCompat
 import fr.ponera.jnkwatch.ble.ConnState
 import fr.ponera.jnkwatch.ble.WatchConnection
 import fr.ponera.jnkwatch.notif.CallReceiver
-import fr.ponera.jnkwatch.notif.SmsReceiver
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -31,7 +29,6 @@ import kotlinx.coroutines.launch
  */
 class WatchService : Service() {
 
-    private val sms = SmsReceiver()
     private val call = CallReceiver()
     private var registered = false
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
@@ -60,7 +57,6 @@ class WatchService : Service() {
     override fun onDestroy() {
         scope.cancel()
         if (registered) {
-            unregisterReceiver(sms)
             unregisterReceiver(call)
             registered = false
         }
@@ -71,7 +67,6 @@ class WatchService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     private fun registerReceivers() {
-        registerReceiver(sms, IntentFilter(Telephony.Sms.Intents.SMS_RECEIVED_ACTION))
         registerReceiver(call, IntentFilter(TelephonyManager.ACTION_PHONE_STATE_CHANGED))
         registered = true
     }
