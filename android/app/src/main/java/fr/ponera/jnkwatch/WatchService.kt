@@ -48,12 +48,12 @@ class WatchService : Service() {
                 }
             }
         }
-        // Weather: push shortly after each connect, then refresh every 30 min.
+        // Weather: push shortly after each connect, then refresh every 2 hours.
         scope.launch {
             var lastPush = 0L
             while (isActive) {
                 val connected = WatchConnection.client.state.value == ConnState.CONNECTED
-                if (connected && System.currentTimeMillis() - lastPush > 30 * 60 * 1000L) {
+                if (connected && System.currentTimeMillis() - lastPush > WEATHER_INTERVAL_MS) {
                     WeatherRepo.fetch(applicationContext)?.let {
                         WatchConnection.client.pushWeather(it.tempC, it.cond, it.location)
                         lastPush = System.currentTimeMillis()
@@ -115,5 +115,6 @@ class WatchService : Service() {
 
     companion object {
         private const val CHANNEL = "watch"
+        private const val WEATHER_INTERVAL_MS = 2L * 60 * 60 * 1000 // 2 hours
     }
 }
