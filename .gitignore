@@ -24,3 +24,13 @@ compile_commands.json
 /firmware/sdkconfig
 /firmware/sdkconfig.old
 /firmware/dependencies.lock
+
+# Android (Gradle/Studio) build artifacts
+/android/.gradle/
+/android/build/
+/android/app/build/
+/android/local.properties
+/android/.idea/
+/android/*.iml
+/android/app/*.iml
+/android/captures/
