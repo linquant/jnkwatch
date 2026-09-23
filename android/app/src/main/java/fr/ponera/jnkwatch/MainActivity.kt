@@ -26,14 +26,23 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun ensurePermissions() {
-        val perms = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
-            arrayOf(Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_CONNECT)
-        else
-            arrayOf(Manifest.permission.ACCESS_FINE_LOCATION)
+        val perms = mutableListOf<String>()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            perms += Manifest.permission.BLUETOOTH_SCAN
+            perms += Manifest.permission.BLUETOOTH_CONNECT
+        } else {
+            perms += Manifest.permission.ACCESS_FINE_LOCATION
+        }
+        // SMS + call forwarding
+        perms += Manifest.permission.RECEIVE_SMS
+        perms += Manifest.permission.READ_PHONE_STATE
+        perms += Manifest.permission.READ_CALL_LOG
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
+            perms += Manifest.permission.POST_NOTIFICATIONS
 
-        val missing = perms.any {
+        val missing = perms.filter {
             checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED
         }
-        if (missing) permLauncher.launch(perms)
+        if (missing.isNotEmpty()) permLauncher.launch(missing.toTypedArray())
     }
 }

@@ -214,6 +214,18 @@ class WatchBleClient(private val context: Context) {
         logMsg("Heure synchronisée")
     }
 
+    /** Push a phone notification: "app\0title\0body" (the watch truncates). */
+    fun pushNotification(app: String, title: String, body: String) {
+        if (_state.value != ConnState.CONNECTED) return
+        val out = java.io.ByteArrayOutputStream()
+        fun field(s: String, max: Int) {
+            out.write(s.take(max).toByteArray(Charsets.UTF_8)); out.write(0)
+        }
+        field(app, 20); field(title, 50); field(body, 140)
+        writeChar(BleUuids.NOTIF_PUSH, out.toByteArray())
+        logMsg("Notif → $app : $title")
+    }
+
     // --- Low-level GATT helpers (queued) --------------------------------------
     private fun charOf(uuid: java.util.UUID): BluetoothGattCharacteristic? =
         gatt?.getService(BleUuids.SERVICE)?.getCharacteristic(uuid)

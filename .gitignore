@@ -25,6 +25,9 @@ compile_commands.json
 /firmware/sdkconfig.old
 /firmware/dependencies.lock
 
+# Built APKs (binaries, not versioned)
+*.apk
+
 # Android (Gradle/Studio) build artifacts
 /android/.gradle/
 /android/build/
