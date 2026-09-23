@@ -11,32 +11,54 @@ import android.os.IBinder
 import android.provider.Telephony
 import android.telephony.TelephonyManager
 import androidx.core.app.NotificationCompat
+import fr.ponera.jnkwatch.ble.ConnState
 import fr.ponera.jnkwatch.ble.WatchConnection
 import fr.ponera.jnkwatch.notif.CallReceiver
 import fr.ponera.jnkwatch.notif.SmsReceiver
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 
 /**
  * Foreground service that keeps the BLE connection alive in the background and
  * hosts the SMS/call receivers, so incoming SMS and calls are forwarded to the
- * watch even when the app UI is closed.
+ * watch even when the app UI is closed. Auto-reconnects when the link drops
+ * (watch reboot, out of range, …).
  */
 class WatchService : Service() {
 
     private val sms = SmsReceiver()
     private val call = CallReceiver()
     private var registered = false
+    private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
     override fun onCreate() {
         super.onCreate()
         createChannel()
         goForeground()
         registerReceivers()
-        WatchConnection.client.connect()
+        // Auto-reconnect: whenever the link is down, retry after a short delay.
+        scope.launch {
+            WatchConnection.client.state.collect { st ->
+                if (st == ConnState.DISCONNECTED) {
+                    delay(3000)
+                    if (isActive) WatchConnection.client.connect()
+                }
+            }
+        }
     }
 
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int = START_STICKY
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        WatchConnection.client.connect()   // no-op if already connecting/connected
+        return START_STICKY
+    }
 
     override fun onDestroy() {
+        scope.cancel()
         if (registered) {
             unregisterReceiver(sms)
             unregisterReceiver(call)
@@ -64,7 +86,7 @@ class WatchService : Service() {
     private fun goForeground() {
         val notif = NotificationCompat.Builder(this, CHANNEL)
             .setContentTitle("JNKWatch")
-            .setContentText("Connectée — SMS et appels transférés")
+            .setContentText("Active — SMS et appels transférés")
             .setSmallIcon(android.R.drawable.stat_sys_data_bluetooth)
             .setOngoing(true)
             .build()

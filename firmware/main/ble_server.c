@@ -149,6 +149,7 @@ static int notifpush_access(uint16_t c, uint16_t a, struct ble_gatt_access_ctxt 
     snprintf(n.body,  sizeof(n.body),  "%s", body);
     n.ts = (long)time(NULL);
     device_notif_enqueue(&n);
+    ESP_LOGI(TAG, "notif push: app='%s' title='%s' body='%s'", n.app, n.title, n.body);
     return 0;
 }
 
