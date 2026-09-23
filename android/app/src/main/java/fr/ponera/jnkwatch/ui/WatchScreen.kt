@@ -44,7 +44,12 @@ import fr.ponera.jnkwatch.ble.ConnState
 import fr.ponera.jnkwatch.model.WatchSettings
 
 @Composable
-fun WatchScreen(vm: WatchViewModel, onNeedPermissions: () -> Unit, onOpenFilter: () -> Unit) {
+fun WatchScreen(
+    vm: WatchViewModel,
+    onNeedPermissions: () -> Unit,
+    onOpenFilter: () -> Unit,
+    onOpenActions: () -> Unit,
+) {
     val state by vm.state.collectAsStateWithLifecycle()
     val settings by vm.settings.collectAsStateWithLifecycle()
     val battery by vm.battery.collectAsStateWithLifecycle()
@@ -88,6 +93,13 @@ fun WatchScreen(vm: WatchViewModel, onNeedPermissions: () -> Unit, onOpenFilter:
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text("Notifications à transférer")
+        }
+
+        androidx.compose.material3.OutlinedButton(
+            onClick = onOpenActions,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text("Boutons d'action")
         }
 
         // Notification access — needed to forward SMS/RCS/app messages.

@@ -12,10 +12,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import fr.ponera.jnkwatch.ui.ActionsScreen
 import fr.ponera.jnkwatch.ui.JnkTheme
 import fr.ponera.jnkwatch.ui.NotifFilterScreen
 import fr.ponera.jnkwatch.ui.WatchScreen
 import fr.ponera.jnkwatch.ui.WatchViewModel
+
+private enum class Screen { MAIN, FILTER, ACTIONS }
 
 class MainActivity : ComponentActivity() {
 
@@ -28,14 +31,15 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         setContent {
             JnkTheme {
-                var showFilter by remember { mutableStateOf(false) }
-                if (showFilter) {
-                    NotifFilterScreen(onBack = { showFilter = false })
-                } else {
-                    WatchScreen(
+                var screen by remember { mutableStateOf(Screen.MAIN) }
+                when (screen) {
+                    Screen.FILTER -> NotifFilterScreen(onBack = { screen = Screen.MAIN })
+                    Screen.ACTIONS -> ActionsScreen(onBack = { screen = Screen.MAIN })
+                    Screen.MAIN -> WatchScreen(
                         vm,
                         onNeedPermissions = ::ensurePermissions,
-                        onOpenFilter = { showFilter = true },
+                        onOpenFilter = { screen = Screen.FILTER },
+                        onOpenActions = { screen = Screen.ACTIONS },
                     )
                 }
             }

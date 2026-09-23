@@ -16,9 +16,13 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import fr.ponera.jnkwatch.model.ActionButton
 import fr.ponera.jnkwatch.model.WatchSettings
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 enum class ConnState { DISCONNECTED, SCANNING, CONNECTING, CONNECTED }
@@ -51,6 +55,11 @@ class WatchBleClient(private val context: Context) {
 
     private val _lastAction = MutableStateFlow<Int?>(null)
     val lastAction: StateFlow<Int?> = _lastAction.asStateFlow()
+
+    // Every watch button tap (StateFlow above dedupes; this fires each time so
+    // the executor POSTs on every tap, including the same button twice).
+    private val _actionEvents = MutableSharedFlow<Int>(extraBufferCapacity = 16)
+    val actionEvents: SharedFlow<Int> = _actionEvents.asSharedFlow()
 
     private val _log = MutableStateFlow("Prêt")
     val log: StateFlow<String> = _log.asStateFlow()
@@ -215,6 +224,7 @@ class WatchBleClient(private val context: Context) {
                 val id = (value[0].toInt() and 0xFF) or ((value[1].toInt() and 0xFF) shl 8) or
                     ((value[2].toInt() and 0xFF) shl 16) or ((value[3].toInt() and 0xFF) shl 24)
                 _lastAction.value = id
+                _actionEvents.tryEmit(id)
                 logMsg("Bouton montre #$id")
             }
         }
@@ -245,6 +255,34 @@ class WatchBleClient(private val context: Context) {
         out.write(0)
         writeChar(BleUuids.WEATHER, out.toByteArray())
         logMsg("Météo → $tempC°C $location")
+    }
+
+    /**
+     * Push the 6 button definitions to the watch: ActionCfg clear (op 0x00),
+     * then one set (op 0x01, 20 bytes) per button:
+     * [op=1][index][id u32 LE][icon][enabled][label 12B NUL-padded].
+     * The watch echoes [id] in ActionEvent when a button is tapped.
+     */
+    fun pushActionConfig(buttons: List<ActionButton>) {
+        if (_state.value != ConnState.CONNECTED) return
+        writeChar(BleUuids.ACTION_CFG, byteArrayOf(0))   // clear
+        buttons.forEachIndexed { i, b ->
+            val out = java.io.ByteArrayOutputStream()
+            out.write(1)               // op: set
+            out.write(i and 0xFF)      // index
+            out.write(b.id and 0xFF)   // id u32 LE
+            out.write((b.id shr 8) and 0xFF)
+            out.write((b.id shr 16) and 0xFF)
+            out.write((b.id shr 24) and 0xFF)
+            out.write(b.icon and 0xFF)
+            out.write(if (b.enabled) 1 else 0)
+            var lab = b.label.toByteArray(Charsets.UTF_8)
+            if (lab.size > 11) lab = lab.copyOf(11)      // leave room for NUL
+            out.write(lab)
+            repeat(12 - lab.size) { out.write(0) }       // pad label to 12 bytes
+            writeChar(BleUuids.ACTION_CFG, out.toByteArray())
+        }
+        logMsg("Boutons → montre (${buttons.size})")
     }
 
     /** Push a phone notification: "app\0title\0body" (the watch truncates). */

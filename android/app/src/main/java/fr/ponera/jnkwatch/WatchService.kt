@@ -10,6 +10,8 @@ import android.os.Build
 import android.os.IBinder
 import android.telephony.TelephonyManager
 import androidx.core.app.NotificationCompat
+import fr.ponera.jnkwatch.actions.ActionRunner
+import fr.ponera.jnkwatch.actions.ActionsPrefs
 import fr.ponera.jnkwatch.ble.ConnState
 import fr.ponera.jnkwatch.ble.WatchConnection
 import fr.ponera.jnkwatch.notif.CallReceiver
@@ -60,6 +62,26 @@ class WatchService : Service() {
                     }
                 }
                 delay(15_000)
+            }
+        }
+        // Action buttons: on each watch tap, POST to the button's configured URL.
+        scope.launch {
+            WatchConnection.client.actionEvents.collect { id ->
+                val b = ActionsPrefs.buttonForId(applicationContext, id) ?: return@collect
+                ActionRunner.post(b.url, b.id, b.label)
+            }
+        }
+        // Re-push the button config on each (re)connect, so a watch reboot keeps
+        // the labels/icons in sync with the phone.
+        scope.launch {
+            var wasConnected = false
+            WatchConnection.client.state.collect { st ->
+                val now = st == ConnState.CONNECTED
+                if (now && !wasConnected) {
+                    delay(1500)   // let settings/time sync finish first
+                    WatchConnection.client.pushActionConfig(ActionsPrefs.load(applicationContext))
+                }
+                wasConnected = now
             }
         }
     }
