@@ -10,8 +10,10 @@ Single source of truth for the GATT contract shared by the **watch firmware**
 - **Role**: the watch is the GATT **peripheral**; the phone is the **central**.
 - **Advertised name**: `JNKWatch`. The 128-bit service UUID (below) is included in
   the advertisement so the app can scan-filter on it.
-- **Security**: **bonding required**. All characteristic access is encrypted
-  (NimBLE `BLE_GATT_CHR_F_*_ENC`). The app must pair on first connect.
+- **Security**: currently **none** — characteristics are unencrypted and no
+  pairing/bonding is required, to work around a NimBLE↔Android re-pairing loop.
+  Re-enabling encryption/bonding is tracked in
+  `docs/tickets/reenable-ble-encryption.md` (label: important).
 - **MTU**: the app requests an ATT MTU of **247**. NotifPush needs a payload of
   190 bytes, so an MTU ≥ 195 is required for a single write; otherwise the write
   is split (NimBLE reassembles long writes).

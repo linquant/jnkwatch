@@ -231,33 +231,32 @@ static const struct ble_gatt_svc_def gatt_svcs[] = {
                 .uuid = &settings_uuid.u,
                 .access_cb = settings_access,
                 .flags = BLE_GATT_CHR_F_READ | BLE_GATT_CHR_F_WRITE |
-                         BLE_GATT_CHR_F_NOTIFY | BLE_GATT_CHR_F_READ_ENC |
-                         BLE_GATT_CHR_F_WRITE_ENC,
+                         BLE_GATT_CHR_F_NOTIFY,
                 .val_handle = &s_settings_val_handle,
                 .descriptors = CUD("Settings"),
             },
             {
                 .uuid = &time_uuid.u,
                 .access_cb = time_access,
-                .flags = BLE_GATT_CHR_F_WRITE | BLE_GATT_CHR_F_WRITE_ENC,
+                .flags = BLE_GATT_CHR_F_WRITE,
                 .descriptors = CUD("Time (epoch u64 LE)"),
             },
             {
                 .uuid = &notifpush_uuid.u,
                 .access_cb = notifpush_access,
-                .flags = BLE_GATT_CHR_F_WRITE | BLE_GATT_CHR_F_WRITE_ENC,
+                .flags = BLE_GATT_CHR_F_WRITE,
                 .descriptors = CUD("Notification push"),
             },
             {
                 .uuid = &notifclr_uuid.u,
                 .access_cb = notifclr_access,
-                .flags = BLE_GATT_CHR_F_WRITE | BLE_GATT_CHR_F_WRITE_ENC,
+                .flags = BLE_GATT_CHR_F_WRITE,
                 .descriptors = CUD("Notification clear"),
             },
             {
                 .uuid = &actioncfg_uuid.u,
                 .access_cb = actioncfg_access,
-                .flags = BLE_GATT_CHR_F_WRITE | BLE_GATT_CHR_F_WRITE_ENC,
+                .flags = BLE_GATT_CHR_F_WRITE,
                 .descriptors = CUD("Action config"),
             },
             {
@@ -270,8 +269,7 @@ static const struct ble_gatt_svc_def gatt_svcs[] = {
             {
                 .uuid = &status_uuid.u,
                 .access_cb = status_access,
-                .flags = BLE_GATT_CHR_F_READ | BLE_GATT_CHR_F_NOTIFY |
-                         BLE_GATT_CHR_F_READ_ENC,
+                .flags = BLE_GATT_CHR_F_READ | BLE_GATT_CHR_F_NOTIFY,
                 .descriptors = CUD("Status"),
             },
             { 0 },
