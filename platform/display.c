@@ -48,8 +48,15 @@ int watch_battery_pct(void)
 void watch_set_backlight(int pct)
 {
     /* PC: no real backlight (the sim shows brightness with a dim overlay).
-     * On hardware: set LEDC PWM duty on the backlight GPIO from pct. */
+     * On hardware: AMOLED DCS 0x51 brightness from pct. */
     (void)pct;
+}
+
+void watch_display_sleep(bool sleeping)
+{
+    /* PC: nothing to do — the sim's black sleep_overlay already blanks the
+     * screen. On hardware: panel OFF/ON via DCS 0x28/0x29. */
+    (void)sleeping;
 }
 
 void watch_set_wrist_wake(bool on)
@@ -148,11 +155,14 @@ int watch_poll_config(wf_config_msg_t *out)
     return 0;
 }
 
-void watch_settings_changed(int brightness, int sleep_ms, bool wrist_wake, int accent)
+void watch_settings_changed(int brightness, int sleep_ms, bool wrist_wake,
+                            bool stay_awake_charging, bool power_saver,
+                            int accent)
 {
     /* PC: nothing to sync/persist. On hardware: update the BLE Settings
      * characteristic (notify the phone) and persist to NVS. */
-    (void)brightness; (void)sleep_ms; (void)wrist_wake; (void)accent;
+    (void)brightness; (void)sleep_ms; (void)wrist_wake;
+    (void)stay_awake_charging; (void)power_saver; (void)accent;
 }
 
 time_t watch_time(void)

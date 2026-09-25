@@ -21,6 +21,7 @@ static lv_obj_t *dim_overlay;
 static lv_obj_t *sleep_overlay;
 static wf_wrist_t wrist;
 static wf_screentime_t screentime; /* time the screen has been lit vs uptime */
+static bool s_asleep; /* current screen-sleep state (see power_tick) */
 
 /* Sleep the screen after inactivity; wake on user input or a wrist raise. */
 static void power_tick(void)
@@ -49,9 +50,23 @@ static void power_tick(void)
      * by default but the accelerometer HAL is still stubbed, so it cannot yet
      * generate a real raise. */
     bool can_wake = lv_indev_get_next(NULL) != NULL;
-    bool asleep = can_wake && !watch_is_charging() &&
+    /* Charging normally keeps the screen on, but the user can disable that
+     * ("Garder allumé sur secteur" off) so the watch also sleeps while plugged
+     * in — handy on a bench/USB with no battery. */
+    bool keep_on_power = watch_is_charging() && face_settings_stay_awake_charging();
+    bool asleep = can_wake && !keep_on_power &&
         lv_display_get_inactive_time(disp) > (uint32_t)face_settings_sleep_ms();
     lv_obj_set_style_bg_opa(sleep_overlay, asleep ? LV_OPA_COVER : LV_OPA_TRANSP, 0);
+
+    /* On the sleep<->wake edge, drive the real panel power (AMOLED off/on).
+     * Only on transition, so we never spam DCS 0x28/0x29 every frame. The device
+     * HAL decides light-sleep (BLE kept) vs, in the "watch only" power-saver
+     * mode, screen-off + deep-sleep with a wrist-raise (IMU) wake. Waking always
+     * shows the normal clock. */
+    if (asleep != s_asleep) {
+        s_asleep = asleep;
+        watch_display_sleep(asleep);
+    }
 
     /* Accumulate screen-on time (screen counts as "on" when not asleep). */
     static uint32_t st_last = 0;
@@ -62,6 +77,8 @@ static void power_tick(void)
     st_started = 1;
     wf_screentime_update(&screentime, dt, !asleep);
 }
+
+bool ui_is_asleep(void) { return s_asleep; }
 
 unsigned long ui_screen_on_ms(void) { return screentime.on_ms; }
 unsigned long ui_uptime_ms(void)    { return screentime.total_ms; }
@@ -101,9 +118,9 @@ void ui_init(void)
 
     /* Horizontal strip: actions | notif | clock | timer | settings | debug.
      * The two TIME watchfaces (clock + aura) share col 2 (swipe up/down), and
-     * SETTINGS is a 4-row column (col 4): brightness / veille / couleurs /
-     * poignet, swipe up/down; swipe LEFT/RIGHT moves along the strip. Clock is
-     * the boot face. */
+     * SETTINGS is a 5-row column (col 4): brightness / veille / couleurs /
+     * poignet / energie, swipe up/down; swipe LEFT/RIGHT moves along the strip.
+     * Clock is the boot face. */
     lv_obj_t *tile_actions  = lv_tileview_add_tile(tv, 0, 0, LV_DIR_RIGHT);
     tile_notif              = lv_tileview_add_tile(tv, 1, 0, LV_DIR_HOR);
     lv_obj_t *tile_clock    = lv_tileview_add_tile(tv, 2, 0, LV_DIR_HOR | LV_DIR_BOTTOM);
@@ -112,7 +129,8 @@ void ui_init(void)
     lv_obj_t *tile_set_b    = lv_tileview_add_tile(tv, 4, 0, LV_DIR_HOR | LV_DIR_BOTTOM);
     lv_obj_t *tile_set_v    = lv_tileview_add_tile(tv, 4, 1, LV_DIR_VER);
     lv_obj_t *tile_set_c    = lv_tileview_add_tile(tv, 4, 2, LV_DIR_VER);
-    lv_obj_t *tile_set_w    = lv_tileview_add_tile(tv, 4, 3, LV_DIR_TOP);
+    lv_obj_t *tile_set_w    = lv_tileview_add_tile(tv, 4, 3, LV_DIR_VER);
+    lv_obj_t *tile_set_e    = lv_tileview_add_tile(tv, 4, 4, LV_DIR_TOP);
     lv_obj_t *tile_debug    = lv_tileview_add_tile(tv, 5, 0, LV_DIR_LEFT);
 
     face_actions_create(tile_actions);
@@ -120,7 +138,7 @@ void ui_init(void)
     face_clock_create(tile_clock);
     face_aura_create(tile_aura);
     face_timer_create(tile_timer);
-    face_settings_create(tile_set_b, tile_set_v, tile_set_c, tile_set_w);
+    face_settings_create(tile_set_b, tile_set_v, tile_set_c, tile_set_w, tile_set_e);
     face_debug_create(tile_debug);
 
     wf_screentime_init(&screentime);
@@ -138,7 +156,8 @@ static void config_tick(void)
     while (watch_poll_config(&m)) {
         switch (m.kind) {
         case WF_CFG_SETTINGS:
-            face_settings_apply_config(m.brightness, m.sleep_ms, m.wrist_wake);
+            face_settings_apply_config(m.brightness, m.sleep_ms, m.wrist_wake,
+                                       m.stay_awake_charging, m.power_saver);
             theme_set_accent((accent_t)m.accent);
             ui_apply_accent();
             break;

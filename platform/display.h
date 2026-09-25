@@ -28,8 +28,18 @@ int watch_battery_pct(void);
 bool watch_is_charging(void);
 
 /* Set display backlight, 10..100%. No-op on PC (the sim dims via an overlay);
- * on hardware, drive the backlight GPIO with LEDC PWM. */
+ * on hardware, set the AMOLED brightness via DCS 0x51 (WRDISBV). */
 void watch_set_backlight(int pct);
+
+/* Enter/leave display sleep. No-op on PC (the sim uses a black overlay); on
+ * hardware, turn the AMOLED panel OFF (DCS 0x28) when sleeping and back ON
+ * (0x29) + restore brightness when waking. This is the dominant battery saver
+ * (the panel is the biggest consumer).
+ * In the normal veille the CPU keeps running (light-sleep) so touch/wrist still
+ * wake the watch and BLE stays connected. In the "watch only" power-saver mode
+ * (config: power_saver) sleeping also arms wake-on-motion (IMU) and deep-sleeps
+ * the SoC with BLE dropped; a wrist raise then reboots straight to the clock. */
+void watch_display_sleep(bool sleeping);
 
 /* Enable/disable lift-to-wake. No-op on PC; on hardware, arm the QMI8658
  * wake-on-motion / tilt detection and gate the display power. */
@@ -70,6 +80,8 @@ typedef struct {
     int  brightness;       /* 10..100                     */
     int  sleep_ms;         /* WF_SLEEP_5S / WF_SLEEP_10S   */
     bool wrist_wake;
+    bool stay_awake_charging; /* keep screen on while on USB/mains */
+    bool power_saver;      /* "watch only" ultra-low-power mode */
     int  accent;           /* 0..ACCENT_COUNT-1           */
     /* WF_CFG_ACTION_SET */
     int      index;        /* 0..WF_ACTION_MAX-1          */
@@ -88,7 +100,9 @@ int watch_poll_config(wf_config_msg_t *out);
 
 /* Report a settings change the USER made on the watch, so the phone can be
  * notified (BLE Settings notify) and the value persisted. No-op on PC. */
-void watch_settings_changed(int brightness, int sleep_ms, bool wrist_wake, int accent);
+void watch_settings_changed(int brightness, int sleep_ms, bool wrist_wake,
+                            bool stay_awake_charging, bool power_saver,
+                            int accent);
 
 /* Current wall-clock time as an epoch. On PC it is the host clock, but can be
  * pinned via the $WATCH_EPOCH env var (seconds) for deterministic screenshots.

@@ -1,6 +1,7 @@
 #pragma once
 /* Portable watch UI. This code contains NO platform dependencies: the exact
  * same source compiles for the PC simulator and for the ESP32-S3 firmware. */
+#include <stdbool.h>
 
 /* Build the watchface on the active (default) LVGL display. */
 void ui_init(void);
@@ -31,3 +32,7 @@ void ui_apply_accent(void);
 /* Apply display brightness (10..100%): drives the backlight HAL and, in the
  * simulator, a dim overlay so the change is visible. */
 void ui_apply_brightness(int pct);
+
+/* True while the screen is asleep (blanked after inactivity). Lets the firmware
+ * loop slow its cadence to save power while the panel is off. */
+bool ui_is_asleep(void);

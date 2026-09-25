@@ -6,6 +6,8 @@
 #include "freertos/task.h"
 #include "esp_log.h"
 #include "esp_timer.h"
+#include "esp_pm.h"
+#include "sdkconfig.h"
 #include "esp_heap_caps.h"
 #include "driver/spi_master.h"
 #include "esp_lcd_panel_io.h"
@@ -26,6 +28,7 @@
 #include "ble_server.h"
 #include "display.h"   /* WATCH_SIZE */
 #include "ui.h"
+#include "panel_ctrl.h"
 
 static const char *TAG = "jnkwatch";
 
@@ -53,7 +56,20 @@ static const sh8601_lcd_init_cmd_t co5300_init_cmds[] = {
 };
 
 static esp_lcd_panel_handle_t s_panel;
+static esp_lcd_panel_io_handle_t s_io;  /* for runtime DCS params (0x51 brightness) */
 static lv_display_t *s_disp;
+
+/* Panel control exposed to the HAL (panel_ctrl.h) for screen-sleep + brightness. */
+void board_panel_on(bool on)
+{
+    if (s_panel) esp_lcd_panel_disp_on_off(s_panel, on);
+}
+
+void board_panel_brightness(uint8_t value)
+{
+    /* DCS 0x51 WRDISBV — one parameter byte. */
+    if (s_io) esp_lcd_panel_io_tx_param(s_io, 0x51, (uint8_t[]){ value }, 1);
+}
 
 /* esp_lcd calls this when a colour transfer to the panel finishes. */
 static bool on_color_done(esp_lcd_panel_io_handle_t io,
@@ -160,13 +176,36 @@ static void clock_init(void)
 
 static uint32_t tick_ms(void) { return (uint32_t)(esp_timer_get_time() / 1000); }
 
+/* Automatic light sleep: the CPU drops to a low frequency (and, with tickless
+ * idle, into light sleep) between activity, cutting SoC draw while the screen is
+ * off — the BLE link is kept alive by the controller's own modem sleep. This is
+ * a no-op unless CONFIG_PM_ENABLE is set (see sdkconfig.defaults); on-device BLE
+ * stability must be validated before enabling it by default. */
+static void power_mgmt_init(void)
+{
+#if CONFIG_PM_ENABLE
+    esp_pm_config_t pm = {
+        .max_freq_mhz = 240,
+        .min_freq_mhz = 40,
+        .light_sleep_enable = true,
+    };
+    esp_err_t err = esp_pm_configure(&pm);
+    ESP_LOGI(TAG, "esp_pm auto light-sleep: %s", esp_err_to_name(err));
+#else
+    ESP_LOGI(TAG, "esp_pm disabled (screen-off + loop throttle only)");
+#endif
+}
+
 static void lvgl_task(void *arg)
 {
     (void)arg;
     for (;;) {
         lv_timer_handler();
         ui_tick();
-        vTaskDelay(pdMS_TO_TICKS(5));
+        /* Screen off after inactivity: slow the loop to ~8 Hz so the CPU idles
+         * far more (the panel is already off). Touch is still polled fast enough
+         * to catch a wake tap; a normal 5 ms cadence resumes on wake. */
+        vTaskDelay(pdMS_TO_TICKS(ui_is_asleep() ? 120 : 5));
     }
 }
 
@@ -208,6 +247,7 @@ void app_main(void)
     };
     ESP_ERROR_CHECK(esp_lcd_new_panel_io_spi(
         (esp_lcd_spi_bus_handle_t)BSP_LCD_SPI_HOST, &io_cfg, &io));
+    s_io = io;  /* keep for runtime DCS params (brightness) */
 
     const esp_lcd_panel_dev_config_t panel_cfg = {
         .reset_gpio_num = BSP_LCD_RST,
@@ -257,7 +297,9 @@ void app_main(void)
         config_store_get(&c);
         wf_config_msg_t m = {
             .kind = WF_CFG_SETTINGS, .brightness = c.brightness,
-            .sleep_ms = c.sleep_ms, .wrist_wake = c.wrist_wake, .accent = c.accent,
+            .sleep_ms = c.sleep_ms, .wrist_wake = c.wrist_wake,
+            .stay_awake_charging = c.stay_awake_charging,
+            .power_saver = c.power_saver, .accent = c.accent,
         };
         device_config_enqueue(&m);
     }
@@ -266,6 +308,9 @@ void app_main(void)
 
     /* Companion-app BLE GATT server (advertises as JNKWatch). */
     ble_server_start();
+
+    /* Power management (auto light-sleep). No-op unless CONFIG_PM_ENABLE. */
+    power_mgmt_init();
 
     ESP_LOGI(TAG, "UI up (%dx%d), touch ready, BLE up", LCD_H, LCD_V);
 }

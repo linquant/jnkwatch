@@ -6,7 +6,9 @@
 #include "imu_qmi8658.h"
 #include "config_store.h"
 #include "ble_server.h"
+#include "panel_ctrl.h"
 #include "esp_timer.h"
+#include "esp_log.h"
 #include "driver/usb_serial_jtag.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
@@ -37,10 +39,13 @@ void device_notif_enqueue(const wf_notif_t *n)
     if (s_notif_q) xQueueSend(s_notif_q, n, 0);
 }
 
-void watch_settings_changed(int brightness, int sleep_ms, bool wrist_wake, int accent)
+void watch_settings_changed(int brightness, int sleep_ms, bool wrist_wake,
+                            bool stay_awake_charging, bool power_saver, int accent)
 {
-    config_store_set_settings(brightness, sleep_ms, wrist_wake, accent);
-    ble_settings_notify(brightness, sleep_ms, wrist_wake, accent);
+    config_store_set_settings(brightness, sleep_ms, wrist_wake,
+                              stay_awake_charging, power_saver, accent);
+    ble_settings_notify(brightness, sleep_ms, wrist_wake,
+                        stay_awake_charging, power_saver, accent);
 }
 
 uint32_t watch_millis(void)
@@ -87,9 +92,40 @@ void watch_send_action(unsigned action_id)
     ble_action_notify(action_id);  /* notify the phone over GATT */
 }
 
+/* Last brightness the UI asked for (10..100), so we can restore it on wake and
+ * avoid writing 0x51 while the panel is off. */
+static int s_backlight = 80;
+static bool s_display_asleep = false;
+
 void watch_set_backlight(int pct)
 {
-    (void)pct; /* TODO(M2): SH8601 DCS 0x51 brightness */
+    if (pct < 0) pct = 0;
+    if (pct > 100) pct = 100;
+    s_backlight = pct;
+    /* Don't fight the sleep state: while asleep the panel is off; brightness is
+     * restored by watch_display_sleep(false) on wake. */
+    if (!s_display_asleep) board_panel_brightness((uint8_t)(pct * 255 / 100));
+}
+
+void watch_display_sleep(bool sleeping)
+{
+    s_display_asleep = sleeping;
+    if (sleeping) {
+        board_panel_on(false);              /* AMOLED off (DCS 0x28) */
+        /* Classic sleep for both modes for now: AMOLED off + loop throttle, CPU
+         * kept running (light-sleep) so a wrist raise / tap wakes the watch and
+         * BLE stays connected. The "watch only" power_saver deep-sleep path (real
+         * SoC deep sleep + QMI8658 wake-on-motion, BLE dropped) is deferred — the
+         * WoM/deep-sleep code lives in imu_qmi8658_arm_wom() for when we resume. */
+        wf_stored_config_t c;
+        config_store_get(&c);
+        ESP_LOGI("power", "SLEEP: screen off (AMOLED 0x28), loop throttled%s",
+                 c.power_saver ? " [watch-only]" : "");
+    } else {
+        board_panel_on(true);               /* AMOLED on  (DCS 0x29) */
+        board_panel_brightness((uint8_t)(s_backlight * 255 / 100)); /* restore */
+        ESP_LOGI("power", "WAKE: screen on (AMOLED 0x29), brightness=%d%%", s_backlight);
+    }
 }
 
 void watch_set_wrist_wake(bool on)

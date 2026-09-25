@@ -25,3 +25,7 @@
 #define BSP_BAT_ADC_CH     3
 
 #define BSP_BOOT_BTN       0
+
+/* Sensor interrupt lines (both RTC-capable ≤21 → usable as deep-sleep wake). */
+#define BSP_IMU_INT        8    /* QMI8658 INT1 — wake-on-motion (wrist raise) */
+#define BSP_RTC_INT        15   /* PCF85063 INT — alarm (unused for now)       */

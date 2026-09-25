@@ -21,6 +21,13 @@
 #define REG_STATUS0  0x2E
 #define REG_AX_L     0x35
 #define REG_RESET    0x60
+#define REG_STATUSINT 0x2D  /* bit7 = Ctrl9 CmdDone handshake                  */
+#define REG_CAL1_L   0x0B   /* WoM threshold (mg) — read by the CTRL9 WoM cmd  */
+#define REG_CAL1_H   0x0C   /* WoM INT select ([7:6]) + blanking ([5:0])       */
+#define CTRL9_CMD_WOM 0x08  /* CTRL_CMD_WRITE_WOM_SETTING                      */
+/* CTRL8: bit7=1 → Ctrl9 handshake via STATUSINT.bit7; bit6=1 → route the
+ * motion-detection interrupt (incl. WoM) to INT1 (the pin wired to GPIO8). */
+#define CTRL8_WOM_INT1 0xC0
 
 #define WHOAMI_VAL   0x05
 #define REG_CTRL5    0x06
@@ -81,6 +88,36 @@ bool imu_qmi8658_init(void)
     rd(REG_CTRL2, &c2, 1); rd(REG_CTRL7, &c7, 1);
     ESP_LOGI(TAG, "QMI8658 ready; CTRL2=0x%02x CTRL7=0x%02x", c2, c7);
     return true;
+}
+
+void imu_qmi8658_arm_wom(uint8_t threshold_mg)
+{
+    if (!s_ready) return;
+    /* QMI8658 Wake-on-Motion, per datasheet §9.4 (Figure 13) + Table 36:
+     *   1. disable sensors (CTRL7=0)
+     *   2. route the motion interrupt to INT1 (CTRL8 bit6) — GPIO8 is INT1
+     *   3. set accel sample rate/scale (CTRL2: ±2g, low-power ODR)
+     *   4. CAL1_L = WoM threshold (mg, non-zero enables); CAL1_H[7:6]=00 →
+     *      INT1 with initial value 0 (idle low, toggles high on motion),
+     *      CAL1_H[5:0]=blanking samples
+     *   5. issue CTRL9 command 0x08 and COMPLETE the handshake by polling
+     *      STATUSINT.bit7 (CmdDone) — omitting this left the command uncommitted
+     *   6. enable the accel only (CTRL7=0x01, low power). */
+    wr(REG_CTRL7, 0x00);
+    wr(REG_CTRL8, CTRL8_WOM_INT1);
+    wr(REG_CTRL2, 0x0D);                 /* ±2g | ~21 Hz low-power ODR */
+    wr(REG_CAL1_L, threshold_mg ? threshold_mg : 1); /* 0 would DISABLE WoM */
+    wr(REG_CAL1_H, 0x02);                /* INT1, initial 0, 2-sample blanking */
+    wr(REG_CTRL9, CTRL9_CMD_WOM);
+    bool done = false;
+    for (int i = 0; i < 60; i++) {       /* up to ~300 ms for CmdDone */
+        uint8_t si = 0;
+        if (rd(REG_STATUSINT, &si, 1) == ESP_OK && (si & 0x80)) { done = true; break; }
+        vTaskDelay(pdMS_TO_TICKS(5));
+    }
+    wr(REG_CTRL7, 0x01);                 /* enable accel only (low power) */
+    ESP_LOGI(TAG, "WoM armed (threshold=%u mg, INT1/GPIO8, CmdDone=%d)",
+             threshold_mg, done);
 }
 
 int imu_qmi8658_status0(void)

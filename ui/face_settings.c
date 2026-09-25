@@ -6,14 +6,16 @@
 #include <stdint.h>
 #include <stdio.h>
 
-/* Settings is split into four vertical sub-screens (swipe up/down):
- *   0 LUMINOSITE   1 VEILLE   2 COULEURS   3 REVEIL POIGNET                */
-#define NSUB 4
+/* Settings is split into five vertical sub-screens (swipe up/down):
+ *   0 LUMINOSITE  1 VEILLE  2 COULEURS  3 REVEIL POIGNET  4 ENERGIE        */
+#define NSUB 5
 
 static wf_settings_t cfg;
 static lv_obj_t *bright_val, *slider, *sw, *color_name;
 static lv_obj_t *dot[ACCENT_COUNT];   /* teinte picker swatches */
 static lv_obj_t *sleep_btn[2], *sleep_lbl[2];
+static lv_obj_t *charge_sw;            /* keep screen on while charging */
+static lv_obj_t *saver_sw;             /* "watch only" ultra-low-power mode */
 static const int SLEEP_VAL[2] = { WF_SLEEP_5S, WF_SLEEP_10S };
 
 static void update_sleep_sel(void)
@@ -39,6 +41,7 @@ static void update_bright_label(void)
 static void notify_change(void)
 {
     watch_settings_changed(cfg.brightness, cfg.sleep_ms, cfg.wrist_wake,
+                           cfg.stay_awake_charging, cfg.power_saver,
                            (int)theme_get_accent());
 }
 
@@ -76,21 +79,48 @@ static void on_sleep(lv_event_t *e)
     notify_change();
 }
 
+static void on_charge(lv_event_t *e)
+{
+    (void)e;
+    wf_settings_set_stay_awake_charging(&cfg, lv_obj_has_state(charge_sw, LV_STATE_CHECKED));
+    notify_change();
+}
+
+static void on_saver(lv_event_t *e)
+{
+    (void)e;
+    wf_settings_set_power_saver(&cfg, lv_obj_has_state(saver_sw, LV_STATE_CHECKED));
+    notify_change();
+}
+
 bool face_settings_wrist_wake(void) { return cfg.wrist_wake; }
 int  face_settings_sleep_ms(void)   { return cfg.sleep_ms; }
 int  face_settings_brightness(void) { return cfg.brightness; }
+bool face_settings_stay_awake_charging(void) { return cfg.stay_awake_charging; }
+bool face_settings_power_saver(void) { return cfg.power_saver; }
 
-void face_settings_apply_config(int brightness, int sleep_ms, bool wrist_wake)
+void face_settings_apply_config(int brightness, int sleep_ms, bool wrist_wake,
+                                bool stay_awake_charging, bool power_saver)
 {
     wf_settings_set_brightness(&cfg, brightness);
     wf_settings_set_sleep_ms(&cfg, sleep_ms);
     wf_settings_set_wrist_wake(&cfg, wrist_wake);
+    wf_settings_set_stay_awake_charging(&cfg, stay_awake_charging);
+    wf_settings_set_power_saver(&cfg, power_saver);
     /* Reflect into the widgets. lv_*_set_value / state changes do NOT emit
      * LV_EVENT_VALUE_CHANGED, so this never loops back through on_* handlers. */
     lv_slider_set_value(slider, cfg.brightness, LV_ANIM_OFF);
     update_bright_label();
     if (cfg.wrist_wake) lv_obj_add_state(sw, LV_STATE_CHECKED);
     else                lv_obj_remove_state(sw, LV_STATE_CHECKED);
+    if (charge_sw) {
+        if (cfg.stay_awake_charging) lv_obj_add_state(charge_sw, LV_STATE_CHECKED);
+        else                         lv_obj_remove_state(charge_sw, LV_STATE_CHECKED);
+    }
+    if (saver_sw) {
+        if (cfg.power_saver) lv_obj_add_state(saver_sw, LV_STATE_CHECKED);
+        else                 lv_obj_remove_state(saver_sw, LV_STATE_CHECKED);
+    }
     update_sleep_sel();
     /* Apply the hardware effects. */
     ui_apply_brightness(cfg.brightness);
@@ -102,6 +132,10 @@ void face_settings_apply_accent(void)
     lv_color_t a = theme_accent();
     lv_obj_set_style_bg_color(slider, a, LV_PART_INDICATOR);
     lv_obj_set_style_bg_color(sw, a, LV_PART_INDICATOR | LV_STATE_CHECKED);
+    if (charge_sw)
+        lv_obj_set_style_bg_color(charge_sw, a, LV_PART_INDICATOR | LV_STATE_CHECKED);
+    if (saver_sw)
+        lv_obj_set_style_bg_color(saver_sw, a, LV_PART_INDICATOR | LV_STATE_CHECKED);
     /* Ring the currently-selected teinte swatch and name it. */
     accent_t cur = theme_get_accent();
     for (int i = 0; i < ACCENT_COUNT; i++) {
@@ -191,10 +225,11 @@ static void page_dots(lv_obj_t *p, int active)
 }
 
 void face_settings_create(lv_obj_t *p_bright, lv_obj_t *p_sleep,
-                          lv_obj_t *p_color, lv_obj_t *p_wrist)
+                          lv_obj_t *p_color, lv_obj_t *p_wrist,
+                          lv_obj_t *p_energy)
 {
     wf_settings_init(&cfg);
-    lv_obj_t *parents[NSUB] = { p_bright, p_sleep, p_color, p_wrist };
+    lv_obj_t *parents[NSUB] = { p_bright, p_sleep, p_color, p_wrist, p_energy };
     for (int s = 0; s < NSUB; s++) page_dots(parents[s], s);
 
     /* --- 0 · LUMINOSITE --------------------------------------------------- */
@@ -232,6 +267,15 @@ void face_settings_create(lv_obj_t *p_bright, lv_obj_t *p_sleep,
         lv_label_set_text(sleep_lbl[i], SLEEP_TXT[i]);
         lv_obj_center(sleep_lbl[i]);
     }
+    /* Keep-awake-while-charging toggle, right under the timeout choice. */
+    caption(cv, "Garder allume sur secteur");
+    charge_sw = lv_switch_create(cv);
+    lv_obj_set_size(charge_sw, 110, 54);
+    lv_obj_set_style_bg_color(charge_sw, COL_TRACK, LV_PART_MAIN);
+    lv_obj_set_style_bg_color(charge_sw, theme_accent(), LV_PART_INDICATOR | LV_STATE_CHECKED);
+    lv_obj_set_style_bg_color(charge_sw, COL_CORE, LV_PART_KNOB);
+    if (cfg.stay_awake_charging) lv_obj_add_state(charge_sw, LV_STATE_CHECKED);
+    lv_obj_add_event_cb(charge_sw, on_charge, LV_EVENT_VALUE_CHANGED, NULL);
 
     /* --- 2 · COULEURS ----------------------------------------------------- */
     lv_obj_t *cc = sub_col(p_color);
@@ -262,6 +306,20 @@ void face_settings_create(lv_obj_t *p_bright, lv_obj_t *p_sleep,
     if (cfg.wrist_wake) lv_obj_add_state(sw, LV_STATE_CHECKED);
     lv_obj_add_event_cb(sw, on_wrist, LV_EVENT_VALUE_CHANGED, NULL);
     caption(cw, "Lever le poignet pour allumer l'ecran");
+
+    /* --- 4 · ENERGIE ------------------------------------------------------ */
+    lv_obj_t *ce = sub_col(p_energy);
+    sub_title(ce, "ENERGIE");
+    caption(ce, "Mode montre seule");
+    saver_sw = lv_switch_create(ce);
+    lv_obj_set_size(saver_sw, 110, 54);
+    lv_obj_set_style_bg_color(saver_sw, COL_TRACK, LV_PART_MAIN);
+    lv_obj_set_style_bg_color(saver_sw, theme_accent(), LV_PART_INDICATOR | LV_STATE_CHECKED);
+    lv_obj_set_style_bg_color(saver_sw, COL_CORE, LV_PART_KNOB);
+    if (cfg.power_saver) lv_obj_add_state(saver_sw, LV_STATE_CHECKED);
+    lv_obj_add_event_cb(saver_sw, on_saver, LV_EVENT_VALUE_CHANGED, NULL);
+    caption(ce, "Ecran eteint en permanence ; lever le poignet affiche "
+                "l'heure. Bluetooth coupe, veille profonde.");
 
     update_bright_label();
     face_settings_apply_accent();

@@ -11,7 +11,7 @@ idf_component_register(
         "${CMAKE_CURRENT_LIST_DIR}/../../ui"
         "${CMAKE_CURRENT_LIST_DIR}/../../ui/fonts"
         "${CMAKE_CURRENT_LIST_DIR}/../../platform"
-    REQUIRES lvgl esp_lvgl_port esp_lcd esp_lcd_sh8601 esp_timer driver esp_psram bt nvs_flash)
+    REQUIRES lvgl esp_lvgl_port esp_lcd esp_lcd_sh8601 esp_timer driver esp_psram bt nvs_flash esp_pm)
 
 # The generated font uses `#include "lvgl/lvgl.h"` unless this is defined.
 target_compile_definitions(${COMPONENT_LIB} PRIVATE LV_LVGL_H_INCLUDE_SIMPLE=1)

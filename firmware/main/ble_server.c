@@ -51,8 +51,10 @@ static uint16_t s_action_val_handle;
 static int  gap_event(struct ble_gap_event *event, void *arg);
 static void advertise(void);
 
-/* Pack the current config into the 4-byte Settings payload. */
-static void settings_pack(uint8_t buf[4])
+/* Pack the current config into the 6-byte Settings payload.
+ * byte4 (stay_awake_charging) and byte5 (power_saver) were appended after the
+ * app's original 4 bytes; shorter old clients still work (see settings_access). */
+static void settings_pack(uint8_t buf[6])
 {
     wf_stored_config_t c;
     config_store_get(&c);
@@ -60,6 +62,8 @@ static void settings_pack(uint8_t buf[4])
     buf[1] = (uint8_t)(c.sleep_ms >= 7500 ? 1 : 0);
     buf[2] = c.wrist_wake ? 1 : 0;
     buf[3] = (uint8_t)c.accent;
+    buf[4] = c.stay_awake_charging ? 1 : 0;
+    buf[5] = c.power_saver ? 1 : 0;
 }
 
 static int settings_access(uint16_t conn_handle, uint16_t attr_handle,
@@ -68,13 +72,13 @@ static int settings_access(uint16_t conn_handle, uint16_t attr_handle,
     (void)conn_handle; (void)attr_handle; (void)arg;
     switch (ctxt->op) {
     case BLE_GATT_ACCESS_OP_READ_CHR: {
-        uint8_t buf[4];
+        uint8_t buf[6];
         settings_pack(buf);
         return os_mbuf_append(ctxt->om, buf, sizeof(buf)) == 0
                    ? 0 : BLE_ATT_ERR_INSUFFICIENT_RES;
     }
     case BLE_GATT_ACCESS_OP_WRITE_CHR: {
-        uint8_t buf[4];
+        uint8_t buf[6] = {0};
         uint16_t len = 0;
         if (ble_hs_mbuf_to_flat(ctxt->om, buf, sizeof(buf), &len) != 0 || len < 4)
             return BLE_ATT_ERR_INVALID_ATTR_VALUE_LEN;
@@ -82,14 +86,21 @@ static int settings_access(uint16_t conn_handle, uint16_t attr_handle,
         int sleep_ms   = buf[1] ? 10000 : 5000;
         bool wrist     = buf[2] != 0;
         int accent     = buf[3] % 6;
-        config_store_set_settings(brightness, sleep_ms, wrist, accent);
+        /* byte4/5 optional: absent (old client) => keep screen on when charging,
+         * power-saver off. */
+        bool stay_awake  = (len >= 5) ? (buf[4] != 0) : true;
+        bool power_saver = (len >= 6) ? (buf[5] != 0) : false;
+        config_store_set_settings(brightness, sleep_ms, wrist, stay_awake,
+                                  power_saver, accent);
         wf_config_msg_t m = {
             .kind = WF_CFG_SETTINGS, .brightness = brightness,
-            .sleep_ms = sleep_ms, .wrist_wake = wrist, .accent = accent,
+            .sleep_ms = sleep_ms, .wrist_wake = wrist,
+            .stay_awake_charging = stay_awake, .power_saver = power_saver,
+            .accent = accent,
         };
         device_config_enqueue(&m);
-        ESP_LOGI(TAG, "settings write: b=%d s=%d w=%d a=%d",
-                 brightness, sleep_ms, wrist, accent);
+        ESP_LOGI(TAG, "settings write: b=%d s=%d w=%d awake=%d psave=%d a=%d",
+                 brightness, sleep_ms, wrist, stay_awake, power_saver, accent);
         return 0;
     }
     default:
@@ -307,12 +318,14 @@ static const struct ble_gatt_svc_def gatt_svcs[] = {
     { 0 },
 };
 
-void ble_settings_notify(int brightness, int sleep_ms, bool wrist_wake, int accent)
+void ble_settings_notify(int brightness, int sleep_ms, bool wrist_wake,
+                         bool stay_awake_charging, bool power_saver, int accent)
 {
     if (s_conn == BLE_HS_CONN_HANDLE_NONE) return;
-    uint8_t buf[4] = {
+    uint8_t buf[6] = {
         (uint8_t)brightness, (uint8_t)(sleep_ms >= 7500 ? 1 : 0),
-        wrist_wake ? 1 : 0, (uint8_t)accent,
+        wrist_wake ? 1 : 0, (uint8_t)accent, stay_awake_charging ? 1 : 0,
+        power_saver ? 1 : 0,
     };
     struct os_mbuf *om = ble_hs_mbuf_from_flat(buf, sizeof(buf));
     if (om) ble_gatts_notify_custom(s_conn, s_settings_val_handle, om);
@@ -351,6 +364,26 @@ static void advertise(void)
     ble_gap_adv_start(s_addr_type, NULL, BLE_HS_FOREVER, &advp, gap_event, NULL);
 }
 
+/* Ask the phone for power-friendly connection parameters once connected. With
+ * slave latency the watch may skip connection events while idle (radio + CPU
+ * stay asleep in light-sleep), yet a notification is still delivered within
+ * ~interval*(latency+1). Units: interval = 1.25 ms, timeout = 10 ms.
+ *   45-70 ms interval, latency 20  -> idle wake ~1.5 s
+ *   supervision 6 s  ( > 2*70ms*(20+1) = 2.94 s, and < the 32 s BLE ceiling ). */
+static void request_low_power_conn_params(uint16_t conn_handle)
+{
+    struct ble_gap_upd_params p = {
+        .itvl_min = 36,             /* 45 ms  */
+        .itvl_max = 56,             /* 70 ms  */
+        .latency = 20,              /* skip up to 20 events when idle */
+        .supervision_timeout = 600, /* 6 s    */
+        .min_ce_len = 0,
+        .max_ce_len = 0,
+    };
+    int rc = ble_gap_update_params(conn_handle, &p);
+    ESP_LOGI(TAG, "conn param request (45-70ms, lat 20, sup 6s): rc=%d", rc);
+}
+
 static int gap_event(struct ble_gap_event *event, void *arg)
 {
     (void)arg;
@@ -359,10 +392,20 @@ static int gap_event(struct ble_gap_event *event, void *arg)
         if (event->connect.status == 0) {
             s_conn = event->connect.conn_handle;
             ESP_LOGI(TAG, "connected");
+            request_low_power_conn_params(s_conn);
         } else {
             advertise();
         }
         return 0;
+    case BLE_GAP_EVENT_CONN_UPDATE: {
+        /* Log the parameters actually in force after negotiation. */
+        struct ble_gap_conn_desc d;
+        if (ble_gap_conn_find(event->conn_update.conn_handle, &d) == 0)
+            ESP_LOGI(TAG, "conn params now: itvl=%d (%.2f ms) latency=%d timeout=%d (%d ms)",
+                     d.conn_itvl, d.conn_itvl * 1.25, d.conn_latency,
+                     d.supervision_timeout, d.supervision_timeout * 10);
+        return 0;
+    }
     case BLE_GAP_EVENT_DISCONNECT:
         ESP_LOGI(TAG, "disconnected (reason %d)", event->disconnect.reason);
         s_conn = BLE_HS_CONN_HANDLE_NONE;

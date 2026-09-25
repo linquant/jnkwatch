@@ -1,17 +1,21 @@
 package fr.ponera.jnkwatch.model
 
-/** Mirror of the 4-byte Settings characteristic. */
+/** Mirror of the 6-byte Settings characteristic (bytes 4 & 5 appended after v1). */
 data class WatchSettings(
     val brightness: Int = 80,     // 10..100
     val sleep10s: Boolean = true, // true = 10 s, false = 5 s
     val wristWake: Boolean = true,
     val accent: Int = 2,          // 0..5 (Cyan default)
+    val stayAwakeCharging: Boolean = true, // keep screen on while on USB/mains
+    val powerSaver: Boolean = false, // "watch only" ultra-low-power (deep sleep)
 ) {
     fun toBytes(): ByteArray = byteArrayOf(
         brightness.coerceIn(10, 100).toByte(),
         if (sleep10s) 1 else 0,
         if (wristWake) 1 else 0,
         (accent % ACCENTS.size).toByte(),
+        if (stayAwakeCharging) 1 else 0,
+        if (powerSaver) 1 else 0,
     )
 
     companion object {
@@ -27,6 +31,10 @@ data class WatchSettings(
                 sleep10s = b[1].toInt() != 0,
                 wristWake = b[2].toInt() != 0,
                 accent = (b[3].toInt() and 0xFF).coerceIn(0, ACCENTS.size - 1),
+                // byte 4 optional: older firmware sends 4 bytes → default true.
+                stayAwakeCharging = if (b.size >= 5) b[4].toInt() != 0 else true,
+                // byte 5 optional: older firmware omits it → power-saver off.
+                powerSaver = if (b.size >= 6) b[5].toInt() != 0 else false,
             )
         }
     }

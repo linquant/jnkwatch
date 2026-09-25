@@ -207,6 +207,39 @@ private fun SettingsCard(s: WatchSettings, onChange: (WatchSettings) -> Unit) {
                 Text("Réveil au poignet", color = Color.White)
                 Switch(checked = s.wristWake, onCheckedChange = { onChange(s.copy(wristWake = it)) })
             }
+
+            // Keep screen on while charging
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("Garder allumé sur secteur", color = Color.White)
+                Switch(
+                    checked = s.stayAwakeCharging,
+                    onCheckedChange = { onChange(s.copy(stayAwakeCharging = it)) },
+                )
+            }
+
+            // Power-saver "watch only" mode (deep sleep, BLE off, clock only)
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text("Mode montre seule", color = Color.White)
+                    Text(
+                        "Écran éteint ; lever le poignet affiche l'heure. Bluetooth coupé.",
+                        color = Color.Gray,
+                        fontSize = 12.sp,
+                    )
+                }
+                Switch(
+                    checked = s.powerSaver,
+                    onCheckedChange = { onChange(s.copy(powerSaver = it)) },
+                )
+            }
         }
     }
 }
