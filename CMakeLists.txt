@@ -27,6 +27,8 @@ set(SHARED_SRC
   ui/face_settings.c
   ui/face_debug.c
   ui/face_aura.c
+  ui/face_apps.c
+  ui/face_level.c
   core/watchface_logic.c
   core/dotfont.c
   core/timer.c
@@ -37,7 +39,8 @@ set(SHARED_SRC
   core/actions.c
   core/pixelstats.c
   core/screentime.c
-  core/weather.c)
+  core/weather.c
+  core/level.c)
 set(SHARED_INC
   ${CMAKE_CURRENT_SOURCE_DIR}/platform
   ${CMAKE_CURRENT_SOURCE_DIR}/ui
@@ -105,6 +108,17 @@ target_include_directories(test_wrist PRIVATE
 target_compile_definitions(test_wrist PRIVATE UNITY_INCLUDE_DOUBLE)
 target_link_libraries(test_wrist m)
 add_test(NAME wrist COMMAND test_wrist)
+
+add_executable(test_level
+  tests/test_level.c
+  core/level.c
+  third_party/unity/src/unity.c)
+target_include_directories(test_level PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/core
+  ${CMAKE_CURRENT_SOURCE_DIR}/third_party/unity/src)
+target_compile_definitions(test_level PRIVATE UNITY_INCLUDE_DOUBLE)
+target_link_libraries(test_level m)
+add_test(NAME level COMMAND test_level)
 
 add_executable(test_activity
   tests/test_activity.c

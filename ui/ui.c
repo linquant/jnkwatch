@@ -7,6 +7,8 @@
 #include "face_aura.h"
 #include "face_timer.h"
 #include "face_settings.h"
+#include "face_apps.h"
+#include "face_level.h"
 #include "face_debug.h"
 #include "display.h"   /* watch_set_backlight(), watch_read_accel(), watch_millis() */
 #include "wrist.h"
@@ -17,6 +19,7 @@
 static lv_obj_t *tv;
 static lv_obj_t *tile_notif; /* tracked so we can clear unread when shown */
 static lv_obj_t *tile_aura;  /* tracked so its costly canvas only animates when shown */
+static lv_obj_t *tile_level; /* tracked so the level only samples the IMU when shown */
 static lv_obj_t *dim_overlay;
 static lv_obj_t *sleep_overlay;
 static wf_wrist_t wrist;
@@ -131,7 +134,9 @@ void ui_init(void)
     lv_obj_t *tile_set_c    = lv_tileview_add_tile(tv, 4, 2, LV_DIR_VER);
     lv_obj_t *tile_set_w    = lv_tileview_add_tile(tv, 4, 3, LV_DIR_VER);
     lv_obj_t *tile_set_e    = lv_tileview_add_tile(tv, 4, 4, LV_DIR_TOP);
-    lv_obj_t *tile_debug    = lv_tileview_add_tile(tv, 5, 0, LV_DIR_LEFT);
+    lv_obj_t *tile_debug    = lv_tileview_add_tile(tv, 5, 0, LV_DIR_HOR);
+    lv_obj_t *tile_apps     = lv_tileview_add_tile(tv, 6, 0, LV_DIR_LEFT | LV_DIR_BOTTOM);
+    tile_level              = lv_tileview_add_tile(tv, 6, 1, LV_DIR_TOP);
 
     face_actions_create(tile_actions);
     face_notif_create(tile_notif);
@@ -140,6 +145,8 @@ void ui_init(void)
     face_timer_create(tile_timer);
     face_settings_create(tile_set_b, tile_set_v, tile_set_c, tile_set_w, tile_set_e);
     face_debug_create(tile_debug);
+    face_apps_create(tile_apps);
+    face_level_create(tile_level);
 
     wf_screentime_init(&screentime);
 
@@ -196,6 +203,13 @@ void ui_tick(void)
         if (a.x1 < UI_W && a.x2 >= 0 && a.y1 < UI_H && a.y2 >= 0)
             face_aura_tick();
     }
+    /* The level samples the IMU each frame — only when it is actually on screen. */
+    if (tile_level) {
+        lv_area_t a;
+        lv_obj_get_coords(tile_level, &a);
+        if (a.x1 < UI_W && a.x2 >= 0 && a.y1 < UI_H && a.y2 >= 0)
+            face_level_tick();
+    }
     face_timer_tick();
     face_debug_tick();
     power_tick();
@@ -217,6 +231,8 @@ void ui_show_face(int idx)
         {3, 0}, /* 4 timer         */
         {4, 0}, /* 5 settings      */
         {5, 0}, /* 6 debug         */
+        {6, 0}, /* 7 apps          */
+        {6, 1}, /* 8 level         */
     };
     if (!tv || idx < 0 || idx >= (int)(sizeof(POS) / sizeof(POS[0]))) return;
     lv_tileview_set_tile_by_index(tv, POS[idx].col, POS[idx].row, LV_ANIM_OFF);
@@ -236,5 +252,7 @@ void ui_apply_accent(void)
     face_notif_apply_accent();
     face_timer_apply_accent();
     face_settings_apply_accent();
+    face_apps_apply_accent();
+    face_level_apply_accent();
     face_debug_apply_accent();
 }

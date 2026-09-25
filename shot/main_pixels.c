@@ -12,9 +12,10 @@
 
 #define THRESH 12 /* max-channel value at/below which a pixel counts as black */
 
-#define NFACE 7
+#define NFACE 9
 static const char *FACE_NAME[NFACE] = {
-    "actions", "notif", "clock", "aura", "timer", "settings", "debug"
+    "actions", "notif", "clock", "aura", "timer", "settings", "debug",
+    "apps", "level"
 };
 
 /* Per-face lit-fraction budget (%). Calibrated from measured values + margin.
@@ -23,7 +24,8 @@ static const char *FACE_NAME[NFACE] = {
  * particles), hence looser. */
 static const double BUDGET[NFACE] = {
     /*actions*/ 32.0, /*notif*/ 12.0, /*clock*/ 12.0, /*aura*/ 16.0,
-    /*timer*/ 30.0, /*settings*/ 18.0, /*debug*/ 14.0
+    /*timer*/ 30.0, /*settings*/ 18.0, /*debug*/ 14.0,
+    /*apps*/ 18.0, /*level*/ 18.0
 };
 
 static void face_stats(int face, wf_pix_stats_t *s)
