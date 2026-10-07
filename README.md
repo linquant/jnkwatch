@@ -16,12 +16,11 @@ any hardware is involved.
 
 ## Features
 
-- **6 swipeable faces** in an `lv_tileview` — a horizontal strip plus a vertical pair:
-  `actions | notifications | [clock ⇅ aura] | timer | settings`.
+- **Swipeable faces** in an `lv_tileview` — a horizontal strip plus vertical pairs:
+  `actions | notifications | [clock ⇅ aura] | settings | debug | [apps ⇅ level]`.
 - **Dual-display clock** (Casio-style): big LCD time + status column (date, battery,
   weather placeholder, activity placeholder, unread bell).
 - **Aura** living watchface: a motion-reactive particle field (energy from the IMU).
-- **Countdown timer** with a depleting ring and touch controls.
 - **Notifications**: a latest-notification card (tap to dismiss & advance); an unread
   **bell** appears on the clock. Fed by a BLE stand-in on PC.
 - **Action buttons**: a customizable 2×3 shortcut grid; a press fires a BLE signal
@@ -77,7 +76,7 @@ git submodule update --init --recursive
 ./shot.sh frame.png <face> <teinte>   # headless: render one face to a PNG
 ./test.sh                       # run the Unity/CTest suite
 ```
-`<face>`: 0=actions 1=notifications 2=clock 3=aura 4=timer 5=settings 6=debug.
+`<face>`: 0=actions 1=notifications 2=clock 3=aura 4=settings 5=debug 6=apps 7=level.
 `<teinte>`: 0..5 (Rose, Vert, Cyan, Violet, Or, Bleu).
 
 The UI reads the clock through the `watch_time()`/`watch_now()` HAL, so renders
@@ -114,6 +113,20 @@ npx lv_font_conv --font lvgl/scripts/built_in_font/Montserrat-Medium.ttf \
   --size 100 --bpp 4 --format lvgl --no-compress \
   --range 0x30-0x3A --range 0xB0 -o ui/fonts/wf_digits_100.c
 ```
+
+## Bill of materials
+
+The physical build targets the Waveshare board below; the rest are the battery,
+connectors, charging and fasteners used for the prototype. Amazon links are
+affiliate links (`tag=jnk00d-20`).
+
+| Part | Description | Link |
+|------|-------------|------|
+| **Main board** | Waveshare ESP32-S3 1.43″ AMOLED round display (466×466, capacitive touch, ESP32-S3R8, Wi-Fi 2.4 GHz + BLE 5.0) | [Amazon](https://www.amazon.fr/dp/B0DV3KM88S?tag=jnk00d-20) |
+| **Battery** | EEMB LiPo 3.7 V 500 mAh (562438), JST 2.0 connector | [Amazon](https://www.amazon.fr/dp/B09DPPMX14?tag=jnk00d-20) |
+| **Connectors** | RUNCCI-YUN JST 1.25 mm 2-pin male/female, 15 cm leads (100 pcs) | [Amazon](https://www.amazon.fr/dp/B09TDCLZGB?tag=jnk00d-20) |
+| **Charging cable** | Magnetic USB-C charging cable, 540° rotatable, 5 V/2 A (2-pack) | [Amazon](https://www.amazon.fr/dp/B0H6JB5NFQ?tag=jnk00d-20) |
+| **Fasteners** | M2 countersunk hex-socket screw kit, grade 10.9, nuts + washers + Allen keys (410 pcs) | [Amazon](https://www.amazon.fr/dp/B0C1BLSBLW?tag=jnk00d-20) |
 
 ## Hardware port (next milestone)
 
