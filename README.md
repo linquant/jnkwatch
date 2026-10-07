@@ -1,134 +1,145 @@
-# Watch — round smartwatch UI (LVGL) + PC emulator
+# JNKWatch — a hackable open-source smartwatch
 
-Firmware UI and a **PC emulation environment** for a round smartwatch, targeting the
-[Waveshare **ESP32-S3-Touch-AMOLED-1.43**](https://www.waveshare.com/product/esp32-s3-touch-amoled-1.43.htm)
-(ESP32-S3, round **AMOLED 466×466** QSPI, capacitive touch **FT3168**, **QMI8658** IMU,
-**PCF85063** RTC, BLE).
+A round smartwatch built in the open: a **platform-independent LVGL v9** interface that runs
+on a desktop **PC emulator** and on a real **ESP32-S3 AMOLED** board, paired with an
+**Android companion app**. The exact same UI source compiles for both targets — only a thin
+driver layer changes — so the whole watchface can be developed, screenshotted and
+unit-tested on a laptop before any hardware is involved.
 
-The UI is written with **LVGL v9** and kept **platform-independent**: the exact same UI
-source runs on the PC and (later) on the device — only a thin driver layer changes. That
-lets the whole watchface be developed, screenshotted and unit-tested on a desktop before
-any hardware is involved.
+Target board: [Waveshare **ESP32-S3-Touch-AMOLED-1.43**](https://www.waveshare.com/product/esp32-s3-touch-amoled-1.43.htm)
+— ESP32-S3, round **AMOLED 466×466** (SH8601 QSPI), capacitive touch **FT3168**,
+**QMI8658** IMU, **PCF85063** RTC, Bluetooth LE.
 
 ![Watch faces](docs/screenshots/faces.png)
 
-> License: **Apache-2.0** · Status: **emulator complete, device drivers are the next milestone**
+> License: **Apache-2.0** · Firmware (C/LVGL + ESP-IDF) · Android companion (Kotlin/Compose)
+
+---
+
+## ⬇️ Downloads
+
+Prebuilt binaries are published on the [**Releases**](https://gitlab.com/johann.nowacki/jnkwatch/-/releases) page.
+The links below always point to the **latest** release:
+
+| What | Download | Notes |
+|------|----------|-------|
+| 📱 **Android companion** | [**jnkwatch-debug.apk**](https://gitlab.com/johann.nowacki/jnkwatch/-/releases/permalink/latest/downloads/jnkwatch-debug.apk) | Install on Android 8.0+ (allow "install from unknown sources"). |
+| ⌚ **Watch firmware** | [**jnkwatch.bin**](https://gitlab.com/johann.nowacki/jnkwatch/-/releases/permalink/latest/downloads/jnkwatch.bin) | Flashable image for the ESP32-S3-Touch-AMOLED-1.43 — see below. |
+
+### Flash the watch firmware
+
+The app image flashes to the `factory` partition at offset **`0x10000`**. With
+[esptool](https://docs.espressif.com/projects/esptool/) installed and the watch connected over USB:
+
+```sh
+esptool.py --chip esp32s3 --port /dev/ttyACM0 --baud 921600 write_flash 0x10000 jnkwatch.bin
+```
+
+> This updates the app on a board that already has the bootloader + partition table (i.e. one
+> that has been flashed from source at least once). For a **fresh** board, build from source and
+> run `idf.py -C firmware flash` once (it writes the bootloader, partition table and app together).
+
+### Install the Android app
+
+Download the APK above and open it on the phone, or via ADB:
+
+```sh
+adb install jnkwatch-debug.apk
+```
+
+Then open the app, grant Bluetooth + notification access, and connect to the watch
+(advertised as `JNKWatch`).
+
+---
 
 ## Features
 
-- **6 swipeable faces** in an `lv_tileview` — a horizontal strip plus a vertical pair:
-  `actions | notifications | [clock ⇅ aura] | timer | settings`.
-- **Dual-display clock** (Casio-style): big LCD time + status column (date, battery,
-  weather placeholder, activity placeholder, unread bell).
-- **Aura** living watchface: a motion-reactive particle field (energy from the IMU).
-- **Countdown timer** with a depleting ring and touch controls.
-- **Notifications**: a latest-notification card (tap to dismiss & advance); an unread
-  **bell** appears on the clock. Fed by a BLE stand-in on PC.
-- **Action buttons**: a customizable 2×3 shortcut grid; a press fires a BLE signal
-  (stubbed on PC). The model is ready for later phone-side customization.
-- **6 accent "teintes"** applied consistently across every face (swap live in Settings,
-  or tap the clock time).
+- **Swipeable faces & apps** in an `lv_tileview` — a horizontal strip with vertical pairs:
+  `actions | notifications | [clock ⇅ aura] | settings | debug | [apps ⇅ level]`.
+- **Dual-display clock** (Casio-style): big LCD time + a status column (date, battery,
+  weather, activity/steps, unread bell).
+- **Aura** living watchface: a tilt-gravity particle field driven by the IMU — particles pool
+  with gravity and *shake-to-explode*.
+- **Notifications**: a latest-notification card (tap to dismiss & advance) with an unread
+  **bell** on the clock; fed by the phone (app notifications, SMS and calls).
+- **Action buttons**: a customizable 2×3 shortcut grid; each press fires a BLE event the phone
+  turns into an **HTTP POST webhook**.
+- **Apps**: a launcher with a live **bubble level** (accelerometer), plus a **step counter**
+  (progress ring to a daily goal) and **Probes** (live server values pushed from the phone).
+- **6 accent "teintes"** applied consistently across every face (Rose, Vert, Cyan, Violet,
+  Or, Bleu) — swap live in Settings.
+- **Power-aware**: screen-off standby, `esp_pm` light-sleep, low-power BLE and an ultra-low
+  "watch-only" mode that keeps the clock alive with the radio off.
 
-## Repository layout
+## Android companion
+
+A Kotlin / Jetpack Compose app that connects over BLE and feeds the watch everything it needs,
+built around a documented GATT contract — see [docs/ble-protocol.md](docs/ble-protocol.md):
+
+- Forwards **notifications, SMS and incoming calls** to the watch.
+- Fetches **weather** (Open-Meteo) and pushes it to the clock face.
+- Maps each **action button** to a configurable **HTTP POST webhook** (custom body + headers).
+- Polls **server probes** (GET endpoints) and pushes the values to the Probes face.
+- Keeps **time and settings** mirrored between phone and watch.
+
+## Architecture
+
+The UI is plain **LVGL v9** split from a thin hardware layer, so one codebase targets three outputs:
 
 ```
-lv_conf.h        LVGL configuration (RGB565, fonts, CLIB malloc)
-core/            pure LOGIC — unit-tested, NO LVGL/platform dependency
-ui/              LVGL faces (turn core/ results into widgets) — shared by every target
-  geometry.h     layout constants derived from the panel size (WATCH_SIZE)
-  theme.{c,h}    palette + the 6 accent teintes
-  fonts/         generated big-digit font (wf_digits_100)
-  face_*.c       one module per face (create / tick / apply_accent)
-  ui.c           face manager (tileview navigation, overlays, accent fan-out)
-platform/        display + tick + HAL (PC framebuffer today, ESP32-S3 tomorrow)
-shot/            headless target: renders one frame to a PNG (for CI / review)
-sim/             interactive target: SDL2 window with mouse-as-touch
-tests/           Unity unit tests for core/
-third_party/     stb_image_write.h (PNG) + Unity (submodule)
-lvgl/            LVGL v9 (submodule)
+core/      pure LOGIC — unit-tested, NO LVGL/platform dependency
+ui/        LVGL faces (turn core/ results into widgets) — shared by every target
+platform/  display + tick + HAL (PC framebuffer AND ESP32-S3)
+firmware/  ESP-IDF app (device drivers: SH8601 panel, FT3168 touch, QMI8658 IMU,
+           PCF85063 RTC, battery/ADC, NimBLE GATT server, NVS config store)
+shot/      headless target: renders one frame to a PNG (for CI / review)
+sim/       interactive target: SDL2 window with mouse-as-touch
+android/   Kotlin/Jetpack Compose companion app
+tests/     Unity unit tests for core/
+third_party/ stb_image_write.h (PNG) + Unity (submodule)
+lvgl/      LVGL v9 (submodule)
 ```
 
-## Getting started
+## Build from source
 
-### Prerequisites
-- CMake ≥ 3.16 and a C11 compiler
-- `libsdl2-dev` (only for the interactive simulator; the headless PNG target needs no display)
-  ```sh
-  sudo apt install cmake build-essential libsdl2-dev
-  ```
+### PC emulator
 
-### Clone (with submodules)
-LVGL and Unity are git submodules, so clone recursively:
 ```sh
-git clone --recursive <repo-url>
-cd watch
-# already cloned without --recursive?
-git submodule update --init --recursive
-```
-
-### Build
-```sh
-./build.sh          # configures + builds all targets into ./build
-```
-
-### Run
-```sh
-./build/watch_sim               # interactive SDL2 window (mouse = touch)
+sudo apt install cmake build-essential libsdl2-dev   # prerequisites
+git clone --recursive https://gitlab.com/johann.nowacki/jnkwatch.git
+cd jnkwatch                      # already cloned? git submodule update --init --recursive
+./build.sh                       # configures + builds all targets into ./build
+./build/watch_sim                # interactive SDL2 window (mouse = touch)
 ./shot.sh frame.png <face> <teinte>   # headless: render one face to a PNG
-./test.sh                       # run the Unity/CTest suite
+./test.sh                        # run the Unity/CTest suite
 ```
-`<face>`: 0=actions 1=notifications 2=clock 3=aura 4=timer 5=settings 6=debug.
+
+`<face>`: 0=actions 1=notifications 2=clock 3=aura 4=settings 5=debug 6=apps 7=level.
 `<teinte>`: 0..5 (Rose, Vert, Cyan, Violet, Or, Bleu).
 
-The UI reads the clock through the `watch_time()`/`watch_now()` HAL, so renders
-can be pinned for deterministic screenshots:
-```sh
-WATCH_EPOCH=$(date -d "2026-09-22 10:09:42" +%s) ./shot.sh clock.png 2 2
-```
+`./pixels.sh --check` (also run in CI as the `amoled_budget` test) fails if any face lights too
+many pixels — a guard against a bright background regressing AMOLED power.
 
-`./pixels.sh` reports the black/lit pixel ratio per face (an AMOLED-power proxy);
-`./pixels.sh --check` (also run in CI as the `amoled_budget` test) fails if any
-face lights too many pixels — a guard against a bright background regressing.
+### Device firmware (ESP-IDF ≥ 5.3)
+
+```sh
+idf.py -C firmware set-target esp32s3
+idf.py -C firmware flash monitor
+```
 
 ## Test-driven development
 
-Logic lives in `core/` with **no LVGL/SDL dependency**, so it runs as fast host unit
-tests (Unity + CTest). The UI only translates `core/` results into widgets. Workflow for
-any new behaviour:
+Logic lives in `core/` with **no LVGL/SDL dependency**, so it runs as fast host unit tests
+(Unity + CTest). The UI only translates `core/` results into widgets:
 
 1. **Red** — add a failing test in `tests/`.
 2. **Green** — implement the pure logic in `core/`, run `./test.sh`.
 3. **Refactor** the UI in `ui/`, confirm visually with `./shot.sh` (read the PNG).
 
-Tested modules: `watchface_logic`, `timer`, `compass`, `settings`, `wrist`, `activity`,
-`notify`, `actions`, `dotfont`.
+## Hardware
 
-## Fonts
-
-Bundled Montserrat sizes (14–48) are enabled in `lv_conf.h`. The large time/heading
-digits use a generated font `ui/fonts/wf_digits_100.c` (digits, `:` and `°` only),
-produced from the Montserrat TTF that ships with LVGL:
-
-```sh
-npx lv_font_conv --font lvgl/scripts/built_in_font/Montserrat-Medium.ttf \
-  --size 100 --bpp 4 --format lvgl --no-compress \
-  --range 0x30-0x3A --range 0xB0 -o ui/fonts/wf_digits_100.c
-```
-
-## Hardware port (next milestone)
-
-The PC emulator is complete. Bringing it up on the ESP32-S3-Touch-AMOLED-1.43 means
-implementing the HAL in `platform/` (the UI in `ui/` stays unchanged):
-
-- **Display**: real `flush_cb` → GC-less **QSPI AMOLED (SH8601/CO5300)** DMA; switch to
-  `LV_DISPLAY_RENDER_MODE_PARTIAL` with two partial buffers in **PSRAM** (a full 466²
-  RGB565 frame is ~434 KB); handle the panel's RGB565 byte order.
-- **Time**: add a `watch_now()` seam backed by the **PCF85063 RTC** (the faces currently
-  read the host clock directly).
-- **Touch**: an **FT3168** (I2C) pointer input device (the sim uses mouse→touch).
-- **IMU / battery / backlight**: back `watch_read_accel`, `watch_battery_pct` and
-  `watch_set_backlight` (AMOLED brightness is a DCS command, not a PWM backlight) with the
-  QMI8658 / ADC / panel.
+Full pinout, driver notes and datasheet links:
+[docs/hardware/ESP32-S3-Touch-AMOLED-1.43.md](docs/hardware/ESP32-S3-Touch-AMOLED-1.43.md).
 
 ## Contributing
 
