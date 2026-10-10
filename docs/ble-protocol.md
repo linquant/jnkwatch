@@ -4,7 +4,7 @@ Single source of truth for the GATT contract shared by the **watch firmware**
 (`firmware/main/ble_server.c`, NimBLE GATT server) and the **Android app**
 (`android/`). Bump the version and keep both sides in lock-step when changing it.
 
-**Protocol version: 1**
+**Protocol version: 2**
 
 ## Link
 - **Role**: the watch is the GATT **peripheral**; the phone is the **central**.
@@ -35,6 +35,7 @@ Base UUID family `6a4e01NN-9b7a-4f2c-8d61-2a1b3c4d5e6f` ("6a4e" = 'j','N').
 | ActionEvent | `6a4e0106-` | Notify | 4 |
 | Status | `6a4e0107-` | Read, Notify | 3 |
 | Weather | `6a4e0108-` | Write | var |
+| Probe | `6a4e0109-` | Write | var |
 
 ### Settings — `6a4e0101` (R / W / Notify), 7 bytes
 Mirrors `wf_settings_t` + accent. Write applies **and persists** (NVS); read
@@ -107,6 +108,23 @@ shown on the clock's weather row.
 
 The phone maps the Open-Meteo WMO `weather_code` to `cond`: 0→clear; 1,2→partly;
 3→cloudy; 45,48→fog; 51–67/80–82→rain; 71–77/85,86→snow; 95,96,99→storm.
+
+### Probe — `6a4e0109` (W), variable
+One server-probe reading for the **Sondes** watchface. The phone polls each
+configured GET probe on its own interval (`GetProbe.intervalMin`) and, for probes
+set to display on the face, writes the extracted value here. The watch keeps the
+latest value per slot and stamps reception with its own clock, so the face shows
+how fresh each value is; no notification is spawned.
+
+| Offset | Field | Type | Notes |
+|-------:|-------|------|-------|
+| 0 | slot | u8 | 0..9 — fixed row per probe (`WF_PROBE_MAX`) |
+| 1 | name | UTF-8 | probe title, NUL-terminated (≤23 bytes) |
+| — | value | UTF-8 | extracted value, NUL-terminated (≤47 bytes) |
+
+The phone assigns `slot` as the probe's position among the probes bound to the
+face, so values keep a stable row. Probes left as notifications use NotifPush
+(`6a4e0103`) instead.
 
 ## Typical session
 1. App scans for `JNKWatch`, connects, bonds, negotiates MTU 247.

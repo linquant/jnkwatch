@@ -75,3 +75,61 @@ void config_store_set_settings(int brightness, int sleep_ms, bool wrist_wake,
         nvs_close(h);
     }
 }
+
+int config_store_get_battery_pct(void)
+{
+    int32_t v = -1;
+    nvs_handle_t h;
+    if (nvs_open(CFG_NS, NVS_READONLY, &h) == ESP_OK) {
+        nvs_get_i32(h, "batt", &v);
+        nvs_close(h);
+    }
+    return (v >= 0 && v <= 100) ? (int)v : -1;
+}
+
+void config_store_set_battery_pct(int pct)
+{
+    /* Written only on plug-in, so flash wear is negligible. */
+    nvs_handle_t h;
+    if (nvs_open(CFG_NS, NVS_READWRITE, &h) == ESP_OK) {
+        nvs_set_i32(h, "batt", pct);
+        nvs_commit(h);
+        nvs_close(h);
+    }
+}
+
+unsigned config_store_get_steps(int *yday)
+{
+    int32_t n = 0, d = -1;
+    nvs_handle_t h;
+    if (nvs_open(CFG_NS, NVS_READONLY, &h) == ESP_OK) {
+        nvs_get_i32(h, "steps", &n);
+        nvs_get_i32(h, "stepd", &d);
+        nvs_close(h);
+    }
+    if (yday) *yday = d;
+    return n > 0 ? (unsigned)n : 0;
+}
+
+void config_store_set_steps(unsigned steps, int yday)
+{
+    /* Throttled by the caller (ui persists at most ~1/min + on day change), so
+     * flash wear stays low. */
+    nvs_handle_t h;
+    if (nvs_open(CFG_NS, NVS_READWRITE, &h) == ESP_OK) {
+        nvs_set_i32(h, "steps", (int32_t)steps);
+        nvs_set_i32(h, "stepd", yday);
+        nvs_commit(h);
+        nvs_close(h);
+    }
+}
+
+void config_store_set_debug_text(const char *key, const char *text)
+{
+    nvs_handle_t h;
+    if (nvs_open(CFG_NS, NVS_READWRITE, &h) == ESP_OK) {
+        nvs_set_str(h, key, text);
+        nvs_commit(h);
+        nvs_close(h);
+    }
+}

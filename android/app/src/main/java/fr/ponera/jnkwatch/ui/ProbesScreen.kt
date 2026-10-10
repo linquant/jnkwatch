@@ -153,6 +153,24 @@ private fun ProbeCard(
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 modifier = Modifier.width(180.dp),
             )
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        if (probe.onFace) "Cadran « Sondes »" else "Notification",
+                        color = Color.White, fontSize = 14.sp,
+                    )
+                    Text(
+                        if (probe.onFace) "Ligne mise à jour à chaque relève"
+                        else "Notification poussée à chaque relève",
+                        color = Color(0xFF9AA7AE), fontSize = 12.sp,
+                    )
+                }
+                Switch(checked = probe.onFace, onCheckedChange = { onChange(probe.copy(onFace = it)) })
+            }
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 OutlinedButton(
                     enabled = !testing && probe.url.isNotBlank(),

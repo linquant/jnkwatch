@@ -19,12 +19,18 @@ const uint16_t *watch_framebuffer(void);
 /* Monotonic milliseconds, used as the LVGL tick source. */
 uint32_t watch_millis(void);
 
-/* Battery charge, 0..100%. Mocked on PC; reads the ADC on real hardware. */
+/* Battery charge, 0..100%, or -1 if unknown. Mocked on PC ($WATCH_BATT);
+ * reads the ADC on real hardware. While charging the device cannot measure the
+ * cell, so this is the last level seen on battery. */
 int watch_battery_pct(void);
 
-/* True while the watch is on USB power (charging). On device: the native USB
- * Serial/JTAG is connected to a host (a dumb charger without data won't count).
- * Used to keep the screen awake while plugged in. PC: $WATCH_CHARGING. */
+/* Battery (VCC) voltage in mV, for diagnostics. PC mock: fixed. */
+int watch_battery_mv(void);
+
+/* True while the watch is on external power (charging). On device: VCC is
+ * above a Li-ion's max, i.e. USB_5V is present (any charger, wall bricks too).
+ * Used for the charging icon and to keep the screen awake while plugged in.
+ * PC: $WATCH_CHARGING. */
 bool watch_is_charging(void);
 
 /* Set display backlight, 10..100%. No-op on PC (the sim dims via an overlay);
@@ -49,6 +55,13 @@ void watch_set_wrist_wake(bool on);
  * raise); on hardware, read the QMI8658. */
 void watch_read_accel(double *ax, double *ay, double *az);
 
+/* Persisted daily step total across reboots. load() returns the stored total
+ * and writes the day-of-year (tm_yday) it belongs to into *yday (-1 if none
+ * stored). save() stores both. On PC there is no persistence: load() returns 0
+ * with *yday=-1 and save() is a no-op. On hardware these go through NVS. */
+uint32_t watch_steps_load(int *yday);
+void     watch_steps_save(uint32_t steps, int yday);
+
 /* Simulated phone notification source (BLE stand-in). Returns 1 and fills
  * *out when a new notification has arrived since the last poll, else 0. On PC
  * a small scripted feed drips notifications in so the screen has content; on
@@ -72,6 +85,7 @@ typedef enum {
     WF_CFG_ACTION_SET,     /* set one action button (index/id/icon/...)   */
     WF_CFG_NOTIF_CLEAR,    /* clear the notification store                */
     WF_CFG_WEATHER,        /* current weather from the phone              */
+    WF_CFG_PROBE,          /* one server-probe value for the Sondes face  */
 } wf_config_kind_t;
 
 typedef struct {
@@ -94,6 +108,10 @@ typedef struct {
     int      temp_c;       /* whole degrees Celsius       */
     int      cond;         /* wf_wx_cond_t (0..6)         */
     char     location[24];
+    /* WF_CFG_PROBE */
+    int      probe_slot;   /* 0..WF_PROBE_MAX-1           */
+    char     probe_name[24];
+    char     probe_value[48];
 } wf_config_msg_t;
 
 /* Dequeue one pending config message. Returns 1 and fills *out, else 0. */

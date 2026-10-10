@@ -12,19 +12,23 @@
 #include <math.h>
 
 /* --- Dual Display watchface (466px native) ---------------------------------
- * Casio-style split screen: big LCD time on the left (HH / MM / :SS), a
- * hairline divider, and a status column on the right (date, battery, weather,
- * steps, unread bell). The accent teinte tints the hour, seconds and the bell.
+ * Casio-style split screen: big LCD time on the left (HH / MM), a hairline
+ * divider, and a status column on the right (date, battery, weather, steps,
+ * unread bell). The accent teinte tints the hour and the bell. No seconds: a
+ * per-second redraw + panel flush costs battery for little value on a watch.
  * No backlight wash — the AMOLED background stays truly black. */
 
 #define COL_STATUS  lv_color_hex(0xC7D2D8) /* bright status text            */
 #define COL_ICON    lv_color_hex(0x9AA6AD) /* muted icon grey (cloud)       */
 #define COL_DIVIDER lv_color_hex(0x2A3138) /* hairline between the columns   */
+#define COL_CHARGE  lv_color_hex(0x34C759) /* charging (bolt + battery)      */
 
-static lv_obj_t *hh, *mm, *ss;         /* left LCD time                      */
+static lv_obj_t *hh, *mm;              /* left LCD time                      */
 static lv_obj_t *date_lbl;             /* "18 SEP"                           */
 static lv_obj_t *batt_ico, *batt_lbl;  /* battery icon + "82%"              */
+static lv_obj_t *batt_bolt;            /* lightning bolt, shown while charging */
 static lv_obj_t *bell;                 /* unread-notification indicator      */
+static lv_obj_t *step_lbl;             /* today's step count                 */
 
 /* Weather (pushed from the phone; the watch only displays it). */
 #define WXW 46
@@ -156,7 +160,6 @@ void face_clock_apply_accent(void)
 {
     lv_color_t a = theme_accent();
     lv_obj_set_style_text_color(hh, a, 0);
-    lv_obj_set_style_text_color(ss, a, 0);
     lv_obj_set_style_text_color(bell, a, 0);
 }
 
@@ -193,8 +196,6 @@ void face_clock_create(lv_obj_t *p)
     lv_obj_align(left, LV_ALIGN_LEFT_MID, 52, 0);
     hh = make_label(left, &wf_digits_100, theme_accent());
     mm = make_label(left, &wf_digits_100, COL_CORE);
-    ss = make_label(left, &lv_font_montserrat_40, theme_accent());
-    lv_obj_set_style_pad_top(ss, 8, 0);
     lv_obj_add_flag(left, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_add_event_cb(left, on_cycle, LV_EVENT_CLICKED, NULL);
 
@@ -206,6 +207,9 @@ void face_clock_create(lv_obj_t *p)
     lv_obj_set_style_text_letter_space(date_lbl, 1, 0);
 
     lv_obj_t *batt_row = make_box(right, LV_FLEX_FLOW_ROW, 10);
+    batt_bolt = make_label(batt_row, &lv_font_montserrat_28, COL_CHARGE);
+    lv_label_set_text(batt_bolt, LV_SYMBOL_CHARGE);
+    lv_obj_add_flag(batt_bolt, LV_OBJ_FLAG_HIDDEN);
     batt_ico = make_label(batt_row, &lv_font_montserrat_28, COL_STATUS);
     lv_label_set_text(batt_ico, LV_SYMBOL_BATTERY_3);
     batt_lbl = make_label(batt_row, &lv_font_montserrat_28, COL_STATUS);
@@ -222,8 +226,8 @@ void face_clock_create(lv_obj_t *p)
     lv_obj_t *step_row = make_box(right, LV_FLEX_FLOW_ROW, 10);
     lv_obj_t *step_ico = make_label(step_row, &lv_font_montserrat_28, COL_ICON);
     lv_label_set_text(step_ico, LV_SYMBOL_LOOP);
-    lv_obj_t *step_lbl = make_label(step_row, &lv_font_montserrat_28, COL_STATUS);
-    lv_label_set_text(step_lbl, "6 240"); /* placeholder: no step counter yet */
+    step_lbl = make_label(step_row, &lv_font_montserrat_28, COL_STATUS);
+    lv_label_set_text(step_lbl, "0"); /* filled from ui_steps_today() each tick */
 
     /* Unread-notification bell; hidden when nothing unread (flex reclaims). */
     bell = make_label(right, &lv_font_montserrat_28, theme_accent());
@@ -251,23 +255,31 @@ void face_clock_tick(void)
         lv_label_set_text(date_lbl, d);
     }
 
-    static int last_sec = -1;
-    if (lt.tm_sec != last_sec) {
-        last_sec = lt.tm_sec;
-        char s[8];
-        snprintf(s, sizeof(s), ":%02d", lt.tm_sec);
-        lv_label_set_text(ss, s);
-    }
-
-    static int last_pct = -1;
-    int pct = watch_battery_pct();
-    if (pct != last_pct) {
+    static int last_pct = -2, last_chg = -1;
+    int pct = watch_battery_pct();          /* -1 = unknown */
+    int chg = watch_is_charging() ? 1 : 0;
+    if (pct != last_pct || chg != last_chg) {
         last_pct = pct;
-        char b[8];
-        snprintf(b, sizeof(b), "%d%%", pct);
-        lv_label_set_text(batt_lbl, b);
+        last_chg = chg;
+        static const char *const icons[] = {
+            LV_SYMBOL_BATTERY_EMPTY, LV_SYMBOL_BATTERY_1, LV_SYMBOL_BATTERY_2,
+            LV_SYMBOL_BATTERY_3, LV_SYMBOL_BATTERY_FULL,
+        };
+        lv_label_set_text(batt_ico, icons[wf_battery_bars(pct < 0 ? 100 : pct)]);
+        if (pct >= 0) {
+            char b[12];
+            snprintf(b, sizeof(b), "%d%%", pct);
+            lv_label_set_text(batt_lbl, b);
+            lv_obj_remove_flag(batt_lbl, LV_OBJ_FLAG_HIDDEN);
+        } else {
+            lv_obj_add_flag(batt_lbl, LV_OBJ_FLAG_HIDDEN);   /* level unknown */
+        }
+        if (chg) lv_obj_remove_flag(batt_bolt, LV_OBJ_FLAG_HIDDEN);
+        else     lv_obj_add_flag(batt_bolt, LV_OBJ_FLAG_HIDDEN);
+
         lv_color_t bc;
-        switch (wf_battery_level(pct)) {
+        if (chg) bc = COL_CHARGE;
+        else switch (wf_battery_level(pct)) {
             case WF_BATT_CRIT: bc = COL_CRIT; break;
             case WF_BATT_LOW:  bc = COL_LOW;  break;
             default:           bc = COL_STATUS; break;
@@ -289,6 +301,15 @@ void face_clock_tick(void)
             lv_label_set_text(bell, nb);
             lv_obj_remove_flag(bell, LV_OBJ_FLAG_HIDDEN);
         }
+    }
+
+    static uint32_t last_steps = UINT32_MAX;
+    uint32_t steps = ui_steps_today();
+    if (steps != last_steps) {
+        last_steps = steps;
+        char s[16];
+        wf_format_steps(s, sizeof(s), steps);
+        lv_label_set_text(step_lbl, s);
     }
 }
 

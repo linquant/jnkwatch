@@ -27,6 +27,7 @@ object GetProbesPrefs {
                     headers = o.optString("headers"),
                     intervalMin = o.optInt("intervalMin", 15),
                     enabled = o.optBoolean("enabled"),
+                    onFace = o.optBoolean("onFace", true),
                 )
             }
         } catch (_: Exception) {
@@ -46,6 +47,7 @@ object GetProbesPrefs {
                     .put("headers", it.headers)
                     .put("intervalMin", it.intervalMin)
                     .put("enabled", it.enabled)
+                    .put("onFace", it.onFace)
             )
         }
         prefs(ctx).edit().putString(KEY, arr.toString()).apply()

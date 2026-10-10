@@ -75,7 +75,8 @@ void face_debug_tick(void)
     snprintf(line, sizeof(line), "Ratio ON  %d%%", ui_screen_on_pct());
     lv_label_set_text(v_ratio, line);
 
-    snprintf(line, sizeof(line), "Batterie  %d%%", watch_battery_pct());
+    snprintf(line, sizeof(line), "Batt %d%% %dmV%s", watch_battery_pct(),
+             watch_battery_mv(), watch_is_charging() ? " CHG" : "");
     lv_label_set_text(v_batt, line);
 
     snprintf(line, sizeof(line), "Non lues  %d", face_notif_unread());

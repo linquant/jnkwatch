@@ -24,3 +24,18 @@ void config_store_get(wf_stored_config_t *out);
 void config_store_set_settings(int brightness, int sleep_ms, bool wrist_wake,
                                int wrist_sens, bool stay_awake_charging,
                                bool power_saver, int accent);
+
+/* Last battery charge measured on battery (0..100), or -1 if never saved. Kept
+ * so a watch booted on a charger (battery unmeasurable) still shows a level. */
+int  config_store_get_battery_pct(void);
+void config_store_set_battery_pct(int pct);
+
+/* Daily step total persisted across reboots. get() returns the stored count
+ * (0 if none) and writes the day-of-year it belongs to into *yday (-1 if none).
+ * set() stores both. */
+unsigned config_store_get_steps(int *yday);
+void     config_store_set_steps(unsigned steps, int yday);
+
+/* Diagnostics: store a text blob under `key` (read back over USB with the
+ * nvs_tool). */
+void config_store_set_debug_text(const char *key, const char *text);

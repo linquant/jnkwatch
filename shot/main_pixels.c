@@ -14,7 +14,7 @@
 
 #define NFACE 9
 static const char *FACE_NAME[NFACE] = {
-    "actions", "notif", "clock", "aura", "timer", "settings", "debug",
+    "actions", "notif", "sondes", "clock", "aura", "settings", "debug",
     "apps", "level"
 };
 
@@ -23,8 +23,8 @@ static const char *FACE_NAME[NFACE] = {
  * lit ~100%), so budgets keep comfortable headroom; aura is animated (moving
  * particles), hence looser. */
 static const double BUDGET[NFACE] = {
-    /*actions*/ 32.0, /*notif*/ 12.0, /*clock*/ 12.0, /*aura*/ 16.0,
-    /*timer*/ 30.0, /*settings*/ 18.0, /*debug*/ 14.0,
+    /*actions*/ 32.0, /*notif*/ 12.0, /*sondes*/ 12.0, /*clock*/ 12.0,
+    /*aura*/ 16.0, /*settings*/ 18.0, /*debug*/ 14.0,
     /*apps*/ 18.0, /*level*/ 18.0
 };
 

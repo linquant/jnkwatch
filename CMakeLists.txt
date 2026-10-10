@@ -23,12 +23,13 @@ set(SHARED_SRC
   ui/face_clock.c
   ui/face_notif.c
   ui/face_actions.c
-  ui/face_timer.c
   ui/face_settings.c
   ui/face_debug.c
   ui/face_aura.c
   ui/face_apps.c
   ui/face_level.c
+  ui/face_steps.c
+  ui/face_probes.c
   core/watchface_logic.c
   core/dotfont.c
   core/timer.c
@@ -40,7 +41,10 @@ set(SHARED_SRC
   core/pixelstats.c
   core/screentime.c
   core/weather.c
-  core/level.c)
+  core/level.c
+  core/pedometer.c
+  core/steps.c
+  core/probes.c)
 set(SHARED_INC
   ${CMAKE_CURRENT_SOURCE_DIR}/platform
   ${CMAKE_CURRENT_SOURCE_DIR}/ui
@@ -69,6 +73,29 @@ target_include_directories(test_watchface_logic PRIVATE
 target_compile_definitions(test_watchface_logic PRIVATE UNITY_INCLUDE_DOUBLE)
 target_link_libraries(test_watchface_logic m)
 add_test(NAME watchface_logic COMMAND test_watchface_logic)
+
+add_executable(test_pedometer
+  tests/test_pedometer.c
+  core/pedometer.c
+  third_party/unity/src/unity.c)
+target_include_directories(test_pedometer PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/core
+  ${CMAKE_CURRENT_SOURCE_DIR}/third_party/unity/src)
+target_compile_definitions(test_pedometer PRIVATE UNITY_INCLUDE_DOUBLE)
+target_link_libraries(test_pedometer m)
+add_test(NAME pedometer COMMAND test_pedometer)
+
+add_executable(test_steps
+  tests/test_steps.c
+  core/steps.c
+  core/pedometer.c
+  third_party/unity/src/unity.c)
+target_include_directories(test_steps PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/core
+  ${CMAKE_CURRENT_SOURCE_DIR}/third_party/unity/src)
+target_compile_definitions(test_steps PRIVATE UNITY_INCLUDE_DOUBLE)
+target_link_libraries(test_steps m)
+add_test(NAME steps COMMAND test_steps)
 
 add_executable(test_dotfont
   tests/test_dotfont.c
@@ -148,6 +175,15 @@ target_include_directories(test_weather PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/core
   ${CMAKE_CURRENT_SOURCE_DIR}/third_party/unity/src)
 add_test(NAME weather COMMAND test_weather)
+
+add_executable(test_probes
+  tests/test_probes.c
+  core/probes.c
+  third_party/unity/src/unity.c)
+target_include_directories(test_probes PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/core
+  ${CMAKE_CURRENT_SOURCE_DIR}/third_party/unity/src)
+add_test(NAME probes COMMAND test_probes)
 
 add_executable(test_actions
   tests/test_actions.c

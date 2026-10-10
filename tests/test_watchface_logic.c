@@ -72,6 +72,21 @@ void test_format_date_uses_month_abbrev(void)
     TEST_ASSERT_EQUAL_STRING("01 JAN", buf);
 }
 
+void test_format_steps_groups_thousands(void)
+{
+    char buf[16];
+    wf_format_steps(buf, sizeof(buf), 0);
+    TEST_ASSERT_EQUAL_STRING("0", buf);
+    wf_format_steps(buf, sizeof(buf), 240);
+    TEST_ASSERT_EQUAL_STRING("240", buf);
+    wf_format_steps(buf, sizeof(buf), 6240);
+    TEST_ASSERT_EQUAL_STRING("6 240", buf);
+    wf_format_steps(buf, sizeof(buf), 12345);
+    TEST_ASSERT_EQUAL_STRING("12 345", buf);
+    wf_format_steps(buf, sizeof(buf), 1000000);
+    TEST_ASSERT_EQUAL_STRING("1 000 000", buf);
+}
+
 /* ---- Casio digital helpers ---- */
 
 void test_seven_seg_mask_known_digits(void)
@@ -120,6 +135,36 @@ void test_second_fraction_ms_is_smooth(void)
     /* half a second past 0 -> 0.5s / 60s */
     TEST_ASSERT_DOUBLE_WITHIN(1e-9, 0.5 / 60.0, wf_second_fraction_ms(0, 500));
     TEST_ASSERT_DOUBLE_WITHIN(1e-9, 30.25 / 60.0, wf_second_fraction_ms(30, 250));
+}
+
+void test_battery_pct_from_mv(void)
+{
+    TEST_ASSERT_EQUAL_INT(100, wf_battery_pct_from_mv(4200));
+    TEST_ASSERT_EQUAL_INT(100, wf_battery_pct_from_mv(4700)); /* on USB: clamp */
+    TEST_ASSERT_EQUAL_INT(90, wf_battery_pct_from_mv(4100));
+    TEST_ASSERT_EQUAL_INT(95, wf_battery_pct_from_mv(4150));  /* interpolated */
+    TEST_ASSERT_EQUAL_INT(50, wf_battery_pct_from_mv(3820));
+    TEST_ASSERT_EQUAL_INT(10, wf_battery_pct_from_mv(3680));
+    TEST_ASSERT_EQUAL_INT(0, wf_battery_pct_from_mv(3300));
+    TEST_ASSERT_EQUAL_INT(0, wf_battery_pct_from_mv(2500));
+    /* Monotonic over the whole range. */
+    int prev = -1;
+    for (int mv = 3000; mv <= 4300; mv += 5) {
+        int p = wf_battery_pct_from_mv(mv);
+        TEST_ASSERT_TRUE(p >= prev);
+        prev = p;
+    }
+}
+
+void test_battery_bars(void)
+{
+    TEST_ASSERT_EQUAL_INT(0, wf_battery_bars(-5));
+    TEST_ASSERT_EQUAL_INT(0, wf_battery_bars(10));
+    TEST_ASSERT_EQUAL_INT(1, wf_battery_bars(11));
+    TEST_ASSERT_EQUAL_INT(2, wf_battery_bars(50));
+    TEST_ASSERT_EQUAL_INT(3, wf_battery_bars(76));
+    TEST_ASSERT_EQUAL_INT(4, wf_battery_bars(86));
+    TEST_ASSERT_EQUAL_INT(4, wf_battery_bars(150));
 }
 
 void test_battery_level_thresholds(void)
@@ -178,12 +223,15 @@ int main(void)
     RUN_TEST(test_hour_fraction_12_and_0_are_top);
     RUN_TEST(test_second_fraction_ms_is_smooth);
     RUN_TEST(test_battery_level_thresholds);
+    RUN_TEST(test_battery_pct_from_mv);
+    RUN_TEST(test_battery_bars);
     RUN_TEST(test_minute_fraction_is_smooth_with_seconds);
     RUN_TEST(test_hour_fraction_wraps_at_12_and_is_smooth);
     RUN_TEST(test_hand_points_up_at_twelve);
     RUN_TEST(test_hand_points_right_at_quarter);
     RUN_TEST(test_format_time_zero_pads);
     RUN_TEST(test_format_date_uses_month_abbrev);
+    RUN_TEST(test_format_steps_groups_thousands);
     RUN_TEST(test_seven_seg_mask_known_digits);
     RUN_TEST(test_seven_seg_mask_rejects_out_of_range);
     RUN_TEST(test_weekday_abbrev);

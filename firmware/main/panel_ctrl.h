@@ -7,8 +7,11 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-/* Turn the display on (DCS 0x29) or off (DCS 0x28). Off cuts the AMOLED to its
- * lowest draw and is the main battery saver during screen sleep. */
+/* Turn the panel off into SLEEP-IN (DCS 0x28 display off, then 0x10) or back
+ * on (0x11 sleep out, 120 ms, 0x29). Sleep-in also stops the controller's
+ * oscillator and panel supplies — far below display-off alone. The FT3168
+ * touch is a separate IC, so touch-to-wake keeps working. Blocks ~40 ms (off)
+ * / ~120 ms (on), per the SH8601 power sequences. */
 void board_panel_on(bool on);
 
 /* Set AMOLED brightness via DCS 0x51 (WRDISBV), value 0..255. */

@@ -13,6 +13,7 @@
 #include <time.h>
 #include <sys/time.h>
 #include "esp_log.h"
+#include "esp_timer.h"
 #include "nvs_flash.h"
 
 #include "nimble/nimble_port.h"
@@ -43,6 +44,7 @@ static const ble_uuid128_t actioncfg_uuid = JNK_UUID128(0x05);
 static const ble_uuid128_t actionevt_uuid = JNK_UUID128(0x06);
 static const ble_uuid128_t status_uuid    = JNK_UUID128(0x07);
 static const ble_uuid128_t weather_uuid   = JNK_UUID128(0x08);
+static const ble_uuid128_t probe_uuid     = JNK_UUID128(0x09);
 
 static uint8_t  s_addr_type;
 static uint16_t s_conn = BLE_HS_CONN_HANDLE_NONE;
@@ -75,13 +77,13 @@ static int settings_access(uint16_t conn_handle, uint16_t attr_handle,
     (void)conn_handle; (void)attr_handle; (void)arg;
     switch (ctxt->op) {
     case BLE_GATT_ACCESS_OP_READ_CHR: {
-        uint8_t buf[6];
+        uint8_t buf[7];
         settings_pack(buf);
         return os_mbuf_append(ctxt->om, buf, sizeof(buf)) == 0
                    ? 0 : BLE_ATT_ERR_INSUFFICIENT_RES;
     }
     case BLE_GATT_ACCESS_OP_WRITE_CHR: {
-        uint8_t buf[6] = {0};
+        uint8_t buf[7] = {0};
         uint16_t len = 0;
         if (ble_hs_mbuf_to_flat(ctxt->om, buf, sizeof(buf), &len) != 0 || len < 4)
             return BLE_ATT_ERR_INVALID_ATTR_VALUE_LEN;
@@ -215,12 +217,13 @@ static int evt_access(uint16_t c, uint16_t a, struct ble_gatt_access_ctxt *ctxt,
     return BLE_ATT_ERR_UNLIKELY;
 }
 
-/* Status (R/notify): battery u8 + fw major/minor. */
+/* Status (R/notify): battery u8 (0xFF = unknown) + fw major/minor. */
 static int status_access(uint16_t c, uint16_t a, struct ble_gatt_access_ctxt *ctxt, void *arg)
 {
     (void)c; (void)a; (void)arg;
     if (ctxt->op != BLE_GATT_ACCESS_OP_READ_CHR) return BLE_ATT_ERR_UNLIKELY;
-    uint8_t b[3] = { (uint8_t)watch_battery_pct(), FW_MAJOR, FW_MINOR };
+    int pct = watch_battery_pct();
+    uint8_t b[3] = { pct < 0 ? 0xFF : (uint8_t)pct, FW_MAJOR, FW_MINOR };
     return os_mbuf_append(ctxt->om, b, sizeof(b)) == 0 ? 0 : BLE_ATT_ERR_INSUFFICIENT_RES;
 }
 
@@ -258,6 +261,37 @@ static int weather_access(uint16_t c, uint16_t a, struct ble_gatt_access_ctxt *c
     m.location[loclen] = '\0';
     device_config_enqueue(&m);
     ESP_LOGI(TAG, "weather: %dC cond=%d loc='%s'", m.temp_c, m.cond, m.location);
+    return 0;
+}
+
+/* Probe (W): one server-probe reading for the Sondes face. Wire format:
+ * [slot u8][name NUL][value NUL]. The watch stamps it with its own clock. */
+static int probe_access(uint16_t c, uint16_t a, struct ble_gatt_access_ctxt *ctxt, void *arg)
+{
+    (void)c; (void)a; (void)arg;
+    if (ctxt->op != BLE_GATT_ACCESS_OP_WRITE_CHR) return BLE_ATT_ERR_UNLIKELY;
+    uint8_t b[96];
+    uint16_t len = 0;
+    if (ble_hs_mbuf_to_flat(ctxt->om, b, sizeof(b) - 1, &len) != 0 || len < 2)
+        return BLE_ATT_ERR_INVALID_ATTR_VALUE_LEN;
+    b[len] = '\0';
+    wf_config_msg_t m = { .kind = WF_CFG_PROBE };
+    m.probe_slot = b[0];
+    const char *name = (const char *)&b[1];
+    size_t nlen = strlen(name);
+    if (nlen >= sizeof(m.probe_name)) nlen = sizeof(m.probe_name) - 1;
+    memcpy(m.probe_name, name, nlen);
+    m.probe_name[nlen] = '\0';
+    /* value follows the name's NUL, still within the flattened buffer */
+    const char *val = name + strlen(name) + 1;
+    if (val <= (const char *)&b[len]) {
+        size_t vlen = strlen(val);
+        if (vlen >= sizeof(m.probe_value)) vlen = sizeof(m.probe_value) - 1;
+        memcpy(m.probe_value, val, vlen);
+        m.probe_value[vlen] = '\0';
+    }
+    device_config_enqueue(&m);
+    ESP_LOGI(TAG, "probe[%d]: '%s' = '%s'", m.probe_slot, m.probe_name, m.probe_value);
     return 0;
 }
 
@@ -316,6 +350,12 @@ static const struct ble_gatt_svc_def gatt_svcs[] = {
                 .access_cb = weather_access,
                 .flags = BLE_GATT_CHR_F_WRITE,
                 .descriptors = CUD("Weather"),
+            },
+            {
+                .uuid = &probe_uuid.u,
+                .access_cb = probe_access,
+                .flags = BLE_GATT_CHR_F_WRITE,
+                .descriptors = CUD("Probe"),
             },
             { 0 },
         },
@@ -376,6 +416,37 @@ static void advertise(void)
  * ~interval*(latency+1). Units: interval = 1.25 ms, timeout = 10 ms.
  *   45-70 ms interval, latency 20  -> idle wake ~1.5 s
  *   supervision 6 s  ( > 2*70ms*(20+1) = 2.94 s, and < the 32 s BLE ceiling ). */
+static void request_low_power_conn_params(uint16_t conn_handle);
+
+/* Phones often ignore a request sent right at connect (while they run service
+ * discovery) and keep a 7.5 ms interval, latency 0: the controller then never
+ * sleeps (battery log 2026-09-29). So re-ask a few seconds later, and again if
+ * the phone moves back under 30 ms — at most CONN_RETRIES times per link. */
+#define CONN_RETRIES      3
+#define CONN_RETRY_US     (5 * 1000 * 1000)
+#define CONN_FAST_ITVL    24   /* 30 ms in 1.25 ms units */
+static esp_timer_handle_t s_conn_timer;
+static int s_conn_tries;
+
+static void conn_retry_cb(void *arg)
+{
+    (void)arg;
+    if (s_conn != BLE_HS_CONN_HANDLE_NONE && s_conn_tries < CONN_RETRIES) {
+        s_conn_tries++;
+        request_low_power_conn_params(s_conn);
+    }
+}
+
+static void schedule_conn_retry(void)
+{
+    if (!s_conn_timer) {
+        const esp_timer_create_args_t a = { .callback = conn_retry_cb, .name = "conn_retry" };
+        if (esp_timer_create(&a, &s_conn_timer) != ESP_OK) return;
+    }
+    esp_timer_stop(s_conn_timer);
+    esp_timer_start_once(s_conn_timer, CONN_RETRY_US);
+}
+
 static void request_low_power_conn_params(uint16_t conn_handle)
 {
     struct ble_gap_upd_params p = {
@@ -390,6 +461,30 @@ static void request_low_power_conn_params(uint16_t conn_handle)
     ESP_LOGI(TAG, "conn param request (45-70ms, lat 20, sup 6s): rc=%d", rc);
 }
 
+bool ble_is_connected(void)
+{
+    return s_conn != BLE_HS_CONN_HANDLE_NONE;
+}
+
+static volatile uint16_t s_itvl, s_latency;   /* negotiated, for the battery log */
+
+static void note_conn_params(uint16_t conn_handle)
+{
+    struct ble_gap_conn_desc d;
+    if (ble_gap_conn_find(conn_handle, &d) == 0) {
+        s_itvl = d.conn_itvl;
+        s_latency = d.conn_latency;
+    }
+}
+
+bool ble_conn_params(uint16_t *itvl, uint16_t *latency)
+{
+    if (s_conn == BLE_HS_CONN_HANDLE_NONE) return false;
+    *itvl = s_itvl;
+    *latency = s_latency;
+    return true;
+}
+
 static int gap_event(struct ble_gap_event *event, void *arg)
 {
     (void)arg;
@@ -397,14 +492,20 @@ static int gap_event(struct ble_gap_event *event, void *arg)
     case BLE_GAP_EVENT_CONNECT:
         if (event->connect.status == 0) {
             s_conn = event->connect.conn_handle;
+            note_conn_params(s_conn);
             ESP_LOGI(TAG, "connected");
+            s_conn_tries = 0;
             request_low_power_conn_params(s_conn);
+            schedule_conn_retry();
         } else {
             advertise();
         }
         return 0;
     case BLE_GAP_EVENT_CONN_UPDATE: {
         /* Log the parameters actually in force after negotiation. */
+        note_conn_params(event->conn_update.conn_handle);
+        if (s_itvl < CONN_FAST_ITVL && s_conn_tries < CONN_RETRIES)
+            schedule_conn_retry();   /* phone went (back) to a fast interval */
         struct ble_gap_conn_desc d;
         if (ble_gap_conn_find(event->conn_update.conn_handle, &d) == 0)
             ESP_LOGI(TAG, "conn params now: itvl=%d (%.2f ms) latency=%d timeout=%d (%d ms)",

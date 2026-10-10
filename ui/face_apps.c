@@ -4,18 +4,26 @@
 #include <stdint.h>
 
 /* Launcher menu. The apps live on the same column as this tile (col 6): the
- * level is the sub-tile directly below (row 1); the second app will be row 2.
- * Tapping "Niveau" jumps there; swiping up from the app returns here. */
+ * level is the sub-tile directly below (row 1), the pedometer is row 2. Tapping
+ * a name jumps there; swiping up from the app returns here. (Sondes is a
+ * top-level watchface left of the clock, not an app here.) */
 
 #define APPS_COL 6
 #define LEVEL_ROW 1
+#define STEPS_ROW 2
 
-static lv_obj_t *btn_level, *btn_soon;
+static lv_obj_t *btn_level, *btn_steps;
 
 static void on_level(lv_event_t *e)
 {
     (void)e;
     ui_goto_tile(APPS_COL, LEVEL_ROW);
+}
+
+static void on_steps(lv_event_t *e)
+{
+    (void)e;
+    ui_goto_tile(APPS_COL, STEPS_ROW);
 }
 
 static lv_obj_t *app_button(lv_obj_t *parent, const char *txt, bool enabled)
@@ -60,11 +68,14 @@ void face_apps_create(lv_obj_t *p)
     btn_level = app_button(col, "Niveau a bulle", true);
     lv_obj_add_event_cb(btn_level, on_level, LV_EVENT_CLICKED, NULL);
 
-    btn_soon = app_button(col, "Bientot...", false);
+    btn_steps = app_button(col, "Podometre", true);
+    lv_obj_add_event_cb(btn_steps, on_steps, LV_EVENT_CLICKED, NULL);
 }
 
 void face_apps_apply_accent(void)
 {
     if (btn_level)
         lv_obj_set_style_border_color(btn_level, theme_accent(), 0);
+    if (btn_steps)
+        lv_obj_set_style_border_color(btn_steps, theme_accent(), 0);
 }

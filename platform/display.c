@@ -3,6 +3,7 @@
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 /* Full-screen render buffer (LVGL renders the whole frame here in FULL mode). */
 static uint16_t g_frame[WATCH_SIZE * WATCH_SIZE];
@@ -40,9 +41,14 @@ uint32_t watch_millis(void)
 
 int watch_battery_pct(void)
 {
-    /* PC mock: a healthy, slowly-breathing level so the ring is visible.
-     * On the ESP32-S3, read the battery divider via ADC here instead. */
-    return 68;
+    /* PC mock: a healthy level, overridable with $WATCH_BATT (0..100, -1). */
+    const char *e = getenv("WATCH_BATT");
+    return (e && *e) ? atoi(e) : 68;
+}
+
+int watch_battery_mv(void)
+{
+    return 3890;
 }
 
 void watch_set_backlight(int pct)
@@ -82,6 +88,25 @@ void watch_read_accel(double *ax, double *ay, double *az)
     *ax = bx + j;
     *ay = by;
     *az = bz + j * 0.6;
+}
+
+uint32_t watch_steps_load(int *yday)
+{
+    /* PC: no persistence, but $WATCH_STEPS pins a starting total so screenshots
+     * can show a realistic count. When set, tag it with today's day-of-year so
+     * the tracker does not immediately roll it over. */
+    const char *e = getenv("WATCH_STEPS");
+    uint32_t v = (e && *e) ? (uint32_t)strtoul(e, NULL, 10) : 0;
+    if (yday) {
+        if (v) { struct tm t; watch_now(&t); *yday = t.tm_yday; }
+        else   { *yday = -1; }
+    }
+    return v;
+}
+
+void watch_steps_save(uint32_t steps, int yday)
+{
+    (void)steps; (void)yday; /* PC: nothing to persist. */
 }
 
 int watch_poll_notification(wf_notif_t *out)
@@ -151,6 +176,35 @@ int watch_poll_config(wf_config_msg_t *out)
             snprintf(out->location, sizeof(out->location), "%s", loc);
             return 1;
         }
+    }
+    /* Headless Sondes face: inject probes from $WATCH_PROBES, a ';'-separated
+     * list of "name=value" entries (e.g. "RDC=21.7 C;Garage=8 C;Exterieur=4"). */
+    static int probe_idx = -1;
+    static char probes_env[256];
+    if (probe_idx < 0) {
+        const char *e = getenv("WATCH_PROBES");
+        snprintf(probes_env, sizeof(probes_env), "%s", e ? e : "");
+        probe_idx = 0;
+    }
+    while (probes_env[0]) {
+        /* Carve the next "name=value" token out of probes_env in place. */
+        char *entry = probes_env;
+        char *sep = strchr(probes_env, ';');
+        if (sep) *sep = '\0';
+        char *rest = sep ? sep + 1 : probes_env + strlen(probes_env);
+        char *eq = strchr(entry, '=');
+        int slot = probe_idx++;
+        int ok = (eq != NULL);
+        if (ok) {
+            *eq = '\0';
+            out->kind = WF_CFG_PROBE;
+            out->probe_slot = slot;
+            snprintf(out->probe_name, sizeof(out->probe_name), "%s", entry);
+            snprintf(out->probe_value, sizeof(out->probe_value), "%s", eq + 1);
+        }
+        /* Shift the remainder down so the next call consumes the next entry. */
+        memmove(probes_env, rest, strlen(rest) + 1);
+        if (ok) return 1;      /* skip malformed entries silently */
     }
     return 0;
 }

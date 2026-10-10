@@ -33,8 +33,11 @@
 #define REG_CTRL5    0x06
 #define CTRL1_ADDR_AI 0x40          /* auto-increment reg addr, little-endian */
 #define CTRL2_ACC    (0x20 | 0x05)  /* ±8g | 250 Hz (matches the demo) */
-#define CTRL3_GYR    (0x60 | 0x05)  /* ±1024 dps | 250 Hz (matches the demo) */
-#define CTRL7_EN     0x03           /* enable accel + gyro (like the demo) */
+#define CTRL7_EN     0x01           /* enable accel ONLY — the gyro is left
+                                       powered down to save current. Nothing
+                                       reads it: lift-to-wake, the aura activity
+                                       level, the bubble level and the pedometer
+                                       all use the accelerometer. */
 #define ACC_LSB_PER_G 4096.0        /* ±8g full scale (measured: ~4096 at 1g) */
 
 static const char *TAG = "qmi8658";
@@ -79,9 +82,9 @@ bool imu_qmi8658_init(void)
     wr(REG_CTRL8, 0xC0);       /* data-valid handshake, like the demo */
     wr(REG_CTRL7, 0x00);       /* disable while configuring */
     wr(REG_CTRL2, CTRL2_ACC);
-    wr(REG_CTRL3, CTRL3_GYR);
+    /* CTRL3 (gyro ODR/scale) left untouched: the gyro is never enabled. */
     wr(REG_CTRL5, 0x00);       /* no low-pass filter */
-    wr(REG_CTRL7, CTRL7_EN);   /* enable accel + gyro */
+    wr(REG_CTRL7, CTRL7_EN);   /* enable accel only (gyro stays off) */
     vTaskDelay(pdMS_TO_TICKS(10));
     s_ready = true;
     uint8_t c2 = 0, c7 = 0;   /* TEMP: confirm config applied post-reset */

@@ -26,6 +26,7 @@
 #include "config_store.h"
 #include "device_hal.h"
 #include "ble_server.h"
+#include "battery.h"
 #include "display.h"   /* WATCH_SIZE */
 #include "ui.h"
 #include "panel_ctrl.h"
@@ -59,16 +60,33 @@ static esp_lcd_panel_handle_t s_panel;
 static esp_lcd_panel_io_handle_t s_io;  /* for runtime DCS params (0x51 brightness) */
 static lv_display_t *s_disp;
 
+/* Send a DCS command at runtime. The panel IO is QSPI with 32-bit commands, so
+ * (like esp_lcd_sh8601's own tx_param) the DCS byte must be wrapped as
+ * 0x02 | 0x00 | cmd | 0x00 — a bare 0x51 would go out as 0x00000051 and be
+ * ignored by the controller. */
+static void panel_dcs(uint8_t cmd, const void *param, size_t len)
+{
+    if (s_io) esp_lcd_panel_io_tx_param(s_io, (0x02 << 24) | (cmd << 8), param, len);
+}
+
 /* Panel control exposed to the HAL (panel_ctrl.h) for screen-sleep + brightness. */
 void board_panel_on(bool on)
 {
-    if (s_panel) esp_lcd_panel_disp_on_off(s_panel, on);
+    if (on) {
+        panel_dcs(0x11, NULL, 0);          /* SLPOUT */
+        vTaskDelay(pdMS_TO_TICKS(120));    /* same as init */
+        panel_dcs(0x29, NULL, 0);          /* DISPON */
+    } else {
+        panel_dcs(0x28, NULL, 0);          /* DISPOFF */
+        vTaskDelay(pdMS_TO_TICKS(40));     /* >= 2 frames */
+        panel_dcs(0x10, NULL, 0);          /* SLPIN */
+    }
 }
 
 void board_panel_brightness(uint8_t value)
 {
     /* DCS 0x51 WRDISBV — one parameter byte. */
-    if (s_io) esp_lcd_panel_io_tx_param(s_io, 0x51, (uint8_t[]){ value }, 1);
+    panel_dcs(0x51, (uint8_t[]){ value }, 1);
 }
 
 /* esp_lcd calls this when a colour transfer to the panel finishes. */
@@ -200,12 +218,19 @@ static void lvgl_task(void *arg)
 {
     (void)arg;
     for (;;) {
-        lv_timer_handler();
+        /* lv_timer_handler() returns how long until LVGL's next due timer
+         * (refresh / input read / animation, all at LV_DEF_REFR_PERIOD = 33 ms),
+         * so sleeping exactly that long loses nothing on screen — whereas the old
+         * fixed 5 ms loop spun ~200x/s (IMU I2C read + face ticks each pass)
+         * for a 30 fps display. */
+        uint32_t next_ms = lv_timer_handler();
         ui_tick();
         /* Screen off after inactivity: slow the loop to ~8 Hz so the CPU idles
          * far more (the panel is already off). Touch is still polled fast enough
-         * to catch a wake tap; a normal 5 ms cadence resumes on wake. */
-        vTaskDelay(pdMS_TO_TICKS(ui_is_asleep() ? 120 : 5));
+         * to catch a wake tap. */
+        uint32_t delay_ms = ui_is_asleep() ? 120
+                          : next_ms < 5 ? 5 : next_ms > 33 ? 33 : next_ms;
+        vTaskDelay(pdMS_TO_TICKS(delay_ms));
     }
 }
 
@@ -265,6 +290,23 @@ void app_main(void)
     lv_init();
     lv_tick_set_cb(tick_ms);
 
+    /* Extend LVGL's heap with a big PSRAM pool. The builtin pool is only 64 KB of
+     * internal RAM — objects AND render layer buffers come from it, so a busy
+     * face or a face-to-face transition could fail to allocate a layer buffer and
+     * crash the renderer (lv_memset on NULL). Adding PSRAM here (instead of
+     * enlarging the internal pool, which starves BLE) lets those allocations
+     * overflow to PSRAM. */
+    {
+        const size_t LV_PSRAM_POOL = 1024 * 1024;
+        void *pool = heap_caps_malloc(LV_PSRAM_POOL, MALLOC_CAP_SPIRAM);
+        if (pool) {
+            lv_mem_add_pool(pool, LV_PSRAM_POOL);
+            ESP_LOGI(TAG, "LVGL: added %u KB PSRAM pool", (unsigned)(LV_PSRAM_POOL / 1024));
+        } else {
+            ESP_LOGW(TAG, "LVGL: PSRAM pool alloc failed");
+        }
+    }
+
     s_disp = lv_display_create(LCD_H, LCD_V);
     lv_display_set_flush_cb(s_disp, flush_cb);
     lv_display_add_event_cb(s_disp, even_rounder, LV_EVENT_INVALIDATE_AREA, NULL);
@@ -278,6 +320,11 @@ void app_main(void)
 
     /* Timezone + clock from the RTC (I2C bus already up from touch init). */
     clock_init();
+
+    /* Battery ADC + external-power detection + minute log. After clock_init so
+     * the log's boot entry carries the RTC time; before ui_init so the first
+     * frame shows a real level. */
+    battery_init();
 
     /* IMU (accelerometer) for lift-to-wake + the aura activity level. */
     imu_qmi8658_init();

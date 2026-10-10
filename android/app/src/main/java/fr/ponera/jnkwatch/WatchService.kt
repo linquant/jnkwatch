@@ -74,19 +74,37 @@ class WatchService : Service() {
             }
         }
         // GET probes: poll each enabled endpoint on its interval and push any
-        // non-empty result to the watch's notification screen.
+        // non-empty result either to the dedicated "Sondes" watchface (onFace),
+        // which refreshes at this polling frequency, or as a notification.
         scope.launch {
             val lastPoll = HashMap<Int, Long>()
+            var wasConnected = false
             while (isActive) {
-                if (WatchConnection.client.state.value == ConnState.CONNECTED) {
+                val connected = WatchConnection.client.state.value == ConnState.CONNECTED
+                // On a fresh (re)connect — e.g. watch reboot — force every probe
+                // to re-poll now so the Sondes face repopulates promptly instead
+                // of waiting out each probe's interval.
+                if (connected && !wasConnected) lastPoll.clear()
+                wasConnected = connected
+                if (connected) {
                     val now = System.currentTimeMillis()
-                    for (p in GetProbesPrefs.load(applicationContext)) {
+                    val all = GetProbesPrefs.load(applicationContext)
+                    // Each face-bound probe keeps a fixed row = its position among
+                    // the probes that actually push there, so values don't hop rows.
+                    val faceSlot = HashMap<Int, Int>()
+                    all.filter { it.enabled && it.onFace && it.url.isNotBlank() }
+                        .forEachIndexed { idx, pr -> faceSlot[pr.id] = idx }
+                    for (p in all) {
                         if (!p.enabled || p.url.isBlank()) continue
                         val period = p.intervalMin.coerceAtLeast(1) * 60_000L
                         if (now - (lastPoll[p.id] ?: 0L) < period) continue
                         lastPoll[p.id] = now
                         val v = ProbeRunner.fetch(p).value
-                        if (!v.isNullOrBlank()) {
+                        if (v.isNullOrBlank()) continue
+                        if (p.onFace) {
+                            val slot = faceSlot[p.id] ?: continue
+                            WatchConnection.client.pushProbe(slot, p.name.ifBlank { "Sonde" }, v)
+                        } else {
                             val title = p.name.ifBlank { "Alerte" }
                             WatchConnection.client.pushNotification(title, title, v)
                         }

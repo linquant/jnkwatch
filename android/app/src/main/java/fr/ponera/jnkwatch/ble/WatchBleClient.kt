@@ -179,6 +179,15 @@ class WatchBleClient(private val context: Context) {
             readChar(BleUuids.SETTINGS)
             readChar(BleUuids.STATUS)
             syncTime()
+            // Then let the link idle cheaply: some phones otherwise keep the
+            // 7.5 ms connection interval used for discovery forever, and the
+            // watch's BLE controller can never sleep (battery log 2026-09-29:
+            // "conn 7.5ms lat0" -> 0 % light-sleep -> ~11 h autonomy). Delayed
+            // so the setup reads/writes above run at full speed first.
+            handler.postDelayed({
+                gatt?.requestConnectionPriority(BluetoothGatt.CONNECTION_PRIORITY_LOW_POWER)
+                logMsg("Liaison basse consommation demandée")
+            }, 3000)
         }
 
         override fun onCharacteristicRead(
@@ -219,7 +228,10 @@ class WatchBleClient(private val context: Context) {
     private fun handleValue(uuid: java.util.UUID, value: ByteArray) {
         when (uuid) {
             BleUuids.SETTINGS -> WatchSettings.fromBytes(value)?.let { _settings.value = it }
-            BleUuids.STATUS -> if (value.isNotEmpty()) _battery.value = value[0].toInt() and 0xFF
+            BleUuids.STATUS -> if (value.isNotEmpty()) {
+                val pct = value[0].toInt() and 0xFF
+                _battery.value = if (pct <= 100) pct else null  // 0xFF = unknown (charging since boot)
+            }
             BleUuids.ACTION_EVENT -> if (value.size >= 4) {
                 val id = (value[0].toInt() and 0xFF) or ((value[1].toInt() and 0xFF) shl 8) or
                     ((value[2].toInt() and 0xFF) shl 16) or ((value[3].toInt() and 0xFF) shl 24)
@@ -283,6 +295,21 @@ class WatchBleClient(private val context: Context) {
             writeChar(BleUuids.ACTION_CFG, out.toByteArray())
         }
         logMsg("Boutons → montre (${buttons.size})")
+    }
+
+    /**
+     * Push one server-probe reading to the watch's "Sondes" face:
+     * [slot u8][name\0][value\0]. [slot] (0-based) is the probe's fixed row; the
+     * watch keeps the latest value per slot and stamps it with its own clock.
+     */
+    fun pushProbe(slot: Int, name: String, value: String) {
+        if (_state.value != ConnState.CONNECTED) return
+        val out = java.io.ByteArrayOutputStream()
+        out.write(slot and 0xFF)
+        out.write(name.take(23).toByteArray(Charsets.UTF_8)); out.write(0)
+        out.write(value.take(47).toByteArray(Charsets.UTF_8)); out.write(0)
+        writeChar(BleUuids.PROBE, out.toByteArray())
+        logMsg("Sonde[$slot] → $name : $value")
     }
 
     /** Push a phone notification: "app\0title\0body" (the watch truncates). */
