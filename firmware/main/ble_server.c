@@ -7,6 +7,7 @@
 #include "config_store.h"
 #include "rtc_pcf85063.h"
 #include "notify.h"         /* wf_notif_t + field lengths */
+#include "wrist.h"          /* WF_WRIST_SENS_COUNT / WF_WRIST_SENS_DEFAULT */
 
 #include <string.h>
 #include <time.h>
@@ -51,10 +52,11 @@ static uint16_t s_action_val_handle;
 static int  gap_event(struct ble_gap_event *event, void *arg);
 static void advertise(void);
 
-/* Pack the current config into the 6-byte Settings payload.
- * byte4 (stay_awake_charging) and byte5 (power_saver) were appended after the
- * app's original 4 bytes; shorter old clients still work (see settings_access). */
-static void settings_pack(uint8_t buf[6])
+/* Pack the current config into the 7-byte Settings payload.
+ * byte4 (stay_awake_charging), byte5 (power_saver) and byte6 (wrist_sens) were
+ * appended after the app's original 4 bytes; shorter old clients still work
+ * (see settings_access). */
+static void settings_pack(uint8_t buf[7])
 {
     wf_stored_config_t c;
     config_store_get(&c);
@@ -64,6 +66,7 @@ static void settings_pack(uint8_t buf[6])
     buf[3] = (uint8_t)c.accent;
     buf[4] = c.stay_awake_charging ? 1 : 0;
     buf[5] = c.power_saver ? 1 : 0;
+    buf[6] = (uint8_t)c.wrist_sens;
 }
 
 static int settings_access(uint16_t conn_handle, uint16_t attr_handle,
@@ -86,21 +89,23 @@ static int settings_access(uint16_t conn_handle, uint16_t attr_handle,
         int sleep_ms   = buf[1] ? 10000 : 5000;
         bool wrist     = buf[2] != 0;
         int accent     = buf[3] % 6;
-        /* byte4/5 optional: absent (old client) => keep screen on when charging,
-         * power-saver off. */
+        /* byte4/5/6 optional: absent (old client) => keep screen on when
+         * charging, power-saver off, default (Moyenne) wrist sensitivity. */
         bool stay_awake  = (len >= 5) ? (buf[4] != 0) : true;
         bool power_saver = (len >= 6) ? (buf[5] != 0) : false;
-        config_store_set_settings(brightness, sleep_ms, wrist, stay_awake,
-                                  power_saver, accent);
+        int wrist_sens   = (len >= 7) ? (buf[6] % WF_WRIST_SENS_COUNT)
+                                      : WF_WRIST_SENS_DEFAULT;
+        config_store_set_settings(brightness, sleep_ms, wrist, wrist_sens,
+                                  stay_awake, power_saver, accent);
         wf_config_msg_t m = {
             .kind = WF_CFG_SETTINGS, .brightness = brightness,
-            .sleep_ms = sleep_ms, .wrist_wake = wrist,
+            .sleep_ms = sleep_ms, .wrist_wake = wrist, .wrist_sens = wrist_sens,
             .stay_awake_charging = stay_awake, .power_saver = power_saver,
             .accent = accent,
         };
         device_config_enqueue(&m);
-        ESP_LOGI(TAG, "settings write: b=%d s=%d w=%d awake=%d psave=%d a=%d",
-                 brightness, sleep_ms, wrist, stay_awake, power_saver, accent);
+        ESP_LOGI(TAG, "settings write: b=%d s=%d w=%d wsens=%d awake=%d psave=%d a=%d",
+                 brightness, sleep_ms, wrist, wrist_sens, stay_awake, power_saver, accent);
         return 0;
     }
     default:
@@ -319,13 +324,14 @@ static const struct ble_gatt_svc_def gatt_svcs[] = {
 };
 
 void ble_settings_notify(int brightness, int sleep_ms, bool wrist_wake,
-                         bool stay_awake_charging, bool power_saver, int accent)
+                         int wrist_sens, bool stay_awake_charging,
+                         bool power_saver, int accent)
 {
     if (s_conn == BLE_HS_CONN_HANDLE_NONE) return;
-    uint8_t buf[6] = {
+    uint8_t buf[7] = {
         (uint8_t)brightness, (uint8_t)(sleep_ms >= 7500 ? 1 : 0),
         wrist_wake ? 1 : 0, (uint8_t)accent, stay_awake_charging ? 1 : 0,
-        power_saver ? 1 : 0,
+        power_saver ? 1 : 0, (uint8_t)wrist_sens,
     };
     struct os_mbuf *om = ble_hs_mbuf_from_flat(buf, sizeof(buf));
     if (om) ble_gatts_notify_custom(s_conn, s_settings_val_handle, om);

@@ -298,6 +298,7 @@ void app_main(void)
         wf_config_msg_t m = {
             .kind = WF_CFG_SETTINGS, .brightness = c.brightness,
             .sleep_ms = c.sleep_ms, .wrist_wake = c.wrist_wake,
+            .wrist_sens = c.wrist_sens,
             .stay_awake_charging = c.stay_awake_charging,
             .power_saver = c.power_saver, .accent = c.accent,
         };

@@ -42,11 +42,45 @@ void test_hysteresis_midband_is_stable(void)
     TEST_ASSERT_FALSE(wf_wrist_update(&w, 0, 0.5, 0.87));
 }
 
+void test_sensitivity_changes_threshold(void)
+{
+    wf_wrist_t w;
+    wf_wrist_init(&w);                      /* Moyenne: up_th = 55deg */
+    /* ~60deg raise: not flat enough to wake at Moyenne */
+    TEST_ASSERT_FALSE(wf_wrist_update(&w, 0, 0.866, 0.5));
+
+    /* Haute (up_th = 65deg): the same ~60deg raise now fires */
+    wf_wrist_init(&w);
+    wf_wrist_set_sensitivity(&w, 2);
+    TEST_ASSERT_TRUE(wf_wrist_update(&w, 0, 0.866, 0.5));
+
+    /* Basse (up_th = 45deg): a ~50deg raise is not enough */
+    wf_wrist_init(&w);
+    wf_wrist_set_sensitivity(&w, 0);
+    TEST_ASSERT_FALSE(wf_wrist_update(&w, 0, 0.766, 0.643));
+    /* but a ~30deg raise still wakes it */
+    TEST_ASSERT_TRUE(wf_wrist_update(&w, 0, 0.5, 0.866));
+}
+
+void test_sensitivity_clamps(void)
+{
+    wf_wrist_t w;
+    wf_wrist_init(&w);
+    /* out-of-range levels clamp to the nearest valid level (no crash / UB) */
+    wf_wrist_set_sensitivity(&w, 99);   /* -> Haute */
+    TEST_ASSERT_TRUE(wf_wrist_update(&w, 0, 0.866, 0.5));  /* ~60deg wakes at Haute */
+    wf_wrist_init(&w);
+    wf_wrist_set_sensitivity(&w, -5);   /* -> Basse */
+    TEST_ASSERT_FALSE(wf_wrist_update(&w, 0, 0.766, 0.643)); /* ~50deg: no wake at Basse */
+}
+
 int main(void)
 {
     UNITY_BEGIN();
     RUN_TEST(test_tilt_deg);
     RUN_TEST(test_wake_on_rest_to_view_edge);
     RUN_TEST(test_hysteresis_midband_is_stable);
+    RUN_TEST(test_sensitivity_changes_threshold);
+    RUN_TEST(test_sensitivity_clamps);
     return UNITY_END();
 }

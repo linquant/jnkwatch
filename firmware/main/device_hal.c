@@ -40,11 +40,12 @@ void device_notif_enqueue(const wf_notif_t *n)
 }
 
 void watch_settings_changed(int brightness, int sleep_ms, bool wrist_wake,
-                            bool stay_awake_charging, bool power_saver, int accent)
+                            int wrist_sens, bool stay_awake_charging,
+                            bool power_saver, int accent)
 {
-    config_store_set_settings(brightness, sleep_ms, wrist_wake,
+    config_store_set_settings(brightness, sleep_ms, wrist_wake, wrist_sens,
                               stay_awake_charging, power_saver, accent);
-    ble_settings_notify(brightness, sleep_ms, wrist_wake,
+    ble_settings_notify(brightness, sleep_ms, wrist_wake, wrist_sens,
                         stay_awake_charging, power_saver, accent);
 }
 

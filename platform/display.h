@@ -80,6 +80,7 @@ typedef struct {
     int  brightness;       /* 10..100                     */
     int  sleep_ms;         /* WF_SLEEP_5S / WF_SLEEP_10S   */
     bool wrist_wake;
+    int  wrist_sens;       /* lift-to-wake sensitivity 0..2 */
     bool stay_awake_charging; /* keep screen on while on USB/mains */
     bool power_saver;      /* "watch only" ultra-low-power mode */
     int  accent;           /* 0..ACCENT_COUNT-1           */
@@ -101,8 +102,8 @@ int watch_poll_config(wf_config_msg_t *out);
 /* Report a settings change the USER made on the watch, so the phone can be
  * notified (BLE Settings notify) and the value persisted. No-op on PC. */
 void watch_settings_changed(int brightness, int sleep_ms, bool wrist_wake,
-                            bool stay_awake_charging, bool power_saver,
-                            int accent);
+                            int wrist_sens, bool stay_awake_charging,
+                            bool power_saver, int accent);
 
 /* Current wall-clock time as an epoch. On PC it is the host clock, but can be
  * pinned via the $WATCH_EPOCH env var (seconds) for deterministic screenshots.

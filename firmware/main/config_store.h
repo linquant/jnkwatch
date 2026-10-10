@@ -7,6 +7,7 @@ typedef struct {
     int  brightness;   /* 10..100                    */
     int  sleep_ms;     /* WF_SLEEP_5S / WF_SLEEP_10S  */
     bool wrist_wake;
+    int  wrist_sens;   /* lift-to-wake sensitivity 0..2 */
     bool stay_awake_charging; /* keep screen on while on USB/mains */
     bool power_saver;  /* "watch only" ultra-low-power mode */
     int  accent;       /* 0..ACCENT_COUNT-1           */
@@ -21,5 +22,5 @@ void config_store_get(wf_stored_config_t *out);
 
 /* Update the settings and persist them to NVS. */
 void config_store_set_settings(int brightness, int sleep_ms, bool wrist_wake,
-                               bool stay_awake_charging, bool power_saver,
-                               int accent);
+                               int wrist_sens, bool stay_awake_charging,
+                               bool power_saver, int accent);

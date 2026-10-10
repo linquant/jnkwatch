@@ -156,12 +156,12 @@ int watch_poll_config(wf_config_msg_t *out)
 }
 
 void watch_settings_changed(int brightness, int sleep_ms, bool wrist_wake,
-                            bool stay_awake_charging, bool power_saver,
-                            int accent)
+                            int wrist_sens, bool stay_awake_charging,
+                            bool power_saver, int accent)
 {
     /* PC: nothing to sync/persist. On hardware: update the BLE Settings
      * characteristic (notify the phone) and persist to NVS. */
-    (void)brightness; (void)sleep_ms; (void)wrist_wake;
+    (void)brightness; (void)sleep_ms; (void)wrist_wake; (void)wrist_sens;
     (void)stay_awake_charging; (void)power_saver; (void)accent;
 }
 

@@ -208,6 +208,24 @@ private fun SettingsCard(s: WatchSettings, onChange: (WatchSettings) -> Unit) {
                 Switch(checked = s.wristWake, onCheckedChange = { onChange(s.copy(wristWake = it)) })
             }
 
+            // Wrist-wake sensitivity (only relevant when the wake gesture is on)
+            if (s.wristWake) {
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("Sensibilité :", color = Color.White)
+                    WatchSettings.WRIST_SENS.forEachIndexed { i, label ->
+                        FilterChip(
+                            selected = s.wristSens == i,
+                            onClick = { onChange(s.copy(wristSens = i)) },
+                            label = { Text(label) },
+                        )
+                    }
+                }
+            }
+
             // Keep screen on while charging
             Row(
                 Modifier.fillMaxWidth(),

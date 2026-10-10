@@ -11,6 +11,10 @@ void face_settings_create(lv_obj_t *bright, lv_obj_t *sleep,
 /* Current lift-to-wake preference (read by the power manager). */
 bool face_settings_wrist_wake(void);
 
+/* Current lift-to-wake sensitivity level 0..2 (read by the UI to configure the
+ * wrist detector). */
+int face_settings_wrist_sens(void);
+
 /* Selected screen-sleep timeout in ms (WF_SLEEP_5S / WF_SLEEP_10S). */
 int face_settings_sleep_ms(void);
 
@@ -27,6 +31,7 @@ bool face_settings_power_saver(void);
 /* Apply settings pushed from the phone (BLE) or restored from NVS at boot.
  * Updates the widgets and hardware without firing the user callbacks. */
 void face_settings_apply_config(int brightness, int sleep_ms, bool wrist_wake,
-                                bool stay_awake_charging, bool power_saver);
+                                int wrist_sens, bool stay_awake_charging,
+                                bool power_saver);
 
 void face_settings_apply_accent(void);

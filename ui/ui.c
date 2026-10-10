@@ -164,7 +164,9 @@ static void config_tick(void)
         switch (m.kind) {
         case WF_CFG_SETTINGS:
             face_settings_apply_config(m.brightness, m.sleep_ms, m.wrist_wake,
-                                       m.stay_awake_charging, m.power_saver);
+                                       m.wrist_sens, m.stay_awake_charging,
+                                       m.power_saver);
+            wf_wrist_set_sensitivity(&wrist, m.wrist_sens);
             theme_set_accent((accent_t)m.accent);
             ui_apply_accent();
             break;

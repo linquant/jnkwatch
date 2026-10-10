@@ -27,7 +27,7 @@ Base UUID family `6a4e01NN-9b7a-4f2c-8d61-2a1b3c4d5e6f` ("6a4e" = 'j','N').
 | Name | UUID (`…-9b7a-4f2c-8d61-2a1b3c4d5e6f`) | Props | Len |
 |------|----------------------------------------|-------|-----|
 | **Service** | `6a4e0100-` | — | — |
-| Settings | `6a4e0101-` | Read, Write, Notify | 6 |
+| Settings | `6a4e0101-` | Read, Write, Notify | 7 |
 | Time | `6a4e0102-` | Write | 8 |
 | NotifPush | `6a4e0103-` | Write | var |
 | NotifClear | `6a4e0104-` | Write | 1 |
@@ -36,7 +36,7 @@ Base UUID family `6a4e01NN-9b7a-4f2c-8d61-2a1b3c4d5e6f` ("6a4e" = 'j','N').
 | Status | `6a4e0107-` | Read, Notify | 3 |
 | Weather | `6a4e0108-` | Write | var |
 
-### Settings — `6a4e0101` (R / W / Notify), 6 bytes
+### Settings — `6a4e0101` (R / W / Notify), 7 bytes
 Mirrors `wf_settings_t` + accent. Write applies **and persists** (NVS); read
 returns the live state; the watch **notifies** when the user changes it on-device.
 
@@ -48,9 +48,11 @@ returns the live state; the watch **notifies** when the user changes it on-devic
 | 3 | accent | u8 | 0–5 = Rose, Vert, Cyan, Violet, Or, Bleu (`accent_t`) |
 | 4 | stay_awake_charging | u8 | 0/1 — keep screen on while on USB/mains (default 1) |
 | 5 | power_saver | u8 | 0/1 — "watch only" ultra-low-power mode: deep sleep, BLE off, always-on clock (default 0) |
+| 6 | wrist_sens | u8 | 0–2 = Basse, Moyenne, Haute — lift-to-wake sensitivity (default 1). Higher wakes at a larger tilt (smaller raise triggers it). |
 
-Bytes 4–5 were appended after v1. A shorter write is still accepted (older app):
-missing `stay_awake_charging` defaults to **1**, missing `power_saver` to **0**.
+Bytes 4–6 were appended after the app's original 4-byte payload. A shorter write
+is still accepted (older app): missing `stay_awake_charging` defaults to **1**,
+missing `power_saver` to **0**, missing `wrist_sens` to **1** (Moyenne).
 
 ### Time — `6a4e0102` (W), 8 bytes
 `u64` Unix epoch **seconds, UTC**. Watch sets the PCF85063 RTC + `settimeofday`.

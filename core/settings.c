@@ -1,9 +1,11 @@
 #include "settings.h"
+#include "wrist.h"   /* WF_WRIST_SENS_COUNT / WF_WRIST_SENS_DEFAULT */
 
 void wf_settings_init(wf_settings_t *s)
 {
     s->brightness = 80;
     s->wrist_wake = true;
+    s->wrist_sens = WF_WRIST_SENS_DEFAULT;
     s->sleep_ms = WF_SLEEP_10S;
     s->stay_awake_charging = true;  /* on by default: don't sleep while plugged in */
     s->power_saver = false;         /* off by default: normal veille, BLE stays up */
@@ -20,6 +22,14 @@ int wf_settings_set_brightness(wf_settings_t *s, int pct)
 void wf_settings_set_wrist_wake(wf_settings_t *s, bool on)
 {
     s->wrist_wake = on;
+}
+
+int wf_settings_set_wrist_sens(wf_settings_t *s, int level)
+{
+    if (level < 0) level = 0;
+    if (level >= WF_WRIST_SENS_COUNT) level = WF_WRIST_SENS_COUNT - 1;
+    s->wrist_sens = level;
+    return level;
 }
 
 void wf_settings_set_stay_awake_charging(wf_settings_t *s, bool on)

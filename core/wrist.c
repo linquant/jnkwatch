@@ -1,9 +1,22 @@
 #include "wrist.h"
 #include <math.h>
 
+void wf_wrist_set_sensitivity(wf_wrist_t *w, int level)
+{
+    if (level < 0) level = 0;
+    if (level >= WF_WRIST_SENS_COUNT) level = WF_WRIST_SENS_COUNT - 1;
+    /* "up" threshold grows with sensitivity (earlier wake). Keep the 20deg
+     * hysteresis gap so the mid-band stays stable at every level. Level 1
+     * reproduces WF_WRIST_UP_TH / WF_WRIST_DOWN_TH. */
+    static const double up[WF_WRIST_SENS_COUNT] = { 45.0, 55.0, 65.0 };
+    w->up_th   = up[level];
+    w->down_th = up[level] + 20.0;
+}
+
 void wf_wrist_init(wf_wrist_t *w)
 {
     w->raised = false;
+    wf_wrist_set_sensitivity(w, WF_WRIST_SENS_DEFAULT);
 }
 
 double wf_wrist_tilt_deg(double ax, double ay, double az)
@@ -20,10 +33,10 @@ bool wf_wrist_update(wf_wrist_t *w, double ax, double ay, double az)
 {
     double tilt = wf_wrist_tilt_deg(ax, ay, az);
     if (w->raised) {
-        if (tilt > WF_WRIST_DOWN_TH) w->raised = false; /* back to resting */
+        if (tilt > w->down_th) w->raised = false; /* back to resting */
         return false;
     }
-    if (tilt < WF_WRIST_UP_TH) {
+    if (tilt < w->up_th) {
         w->raised = true;
         return true; /* wake gesture completed */
     }
