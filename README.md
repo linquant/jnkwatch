@@ -147,16 +147,17 @@ Full pinout, driver notes and datasheet links:
 ### Bill of materials
 
 The physical build targets the Waveshare board below; the rest are the battery,
-connectors, charging and fasteners used for the prototype. Amazon links are
-affiliate links (`tag=jnk00d-20`).
+connectors, charging and fasteners used for the prototype. Both columns are
+affiliate links (`tag=jnk00d-20`); the US column lists the same part where
+amazon.com carries it, otherwise the closest equivalent.
 
-| Part | Description | Link |
-|------|-------------|------|
-| **Main board** | Waveshare ESP32-S3 1.43″ AMOLED round display (466×466, capacitive touch, ESP32-S3R8, Wi-Fi 2.4 GHz + BLE 5.0) | [Amazon](https://www.amazon.fr/dp/B0DV3KM88S?tag=jnk00d-20) |
-| **Battery** | EEMB LiPo 3.7 V 500 mAh (562438), JST 2.0 connector | [Amazon](https://www.amazon.fr/dp/B09DPPMX14?tag=jnk00d-20) |
-| **Connectors** | RUNCCI-YUN JST 1.25 mm 2-pin male/female, 15 cm leads (100 pcs) | [Amazon](https://www.amazon.fr/dp/B09TDCLZGB?tag=jnk00d-20) |
-| **Charging cable** | Magnetic USB-C charging cable, 540° rotatable, 5 V/2 A (2-pack) | [Amazon](https://www.amazon.fr/dp/B0H6JB5NFQ?tag=jnk00d-20) |
-| **Fasteners** | M2 countersunk hex-socket screw kit, grade 10.9, nuts + washers + Allen keys (410 pcs) | [Amazon](https://www.amazon.fr/dp/B0C1BLSBLW?tag=jnk00d-20) |
+| Part | Description | Amazon FR | Amazon US |
+|------|-------------|-----------|-----------|
+| **Main board** | Waveshare ESP32-S3 1.43″ AMOLED round display (466×466, capacitive touch, ESP32-S3R8, Wi-Fi 2.4 GHz + BLE 5.0) | [B0DV3KM88S](https://www.amazon.fr/dp/B0DV3KM88S?tag=jnk00d-20) | [B0DT9PSDW6](https://www.amazon.com/dp/B0DT9PSDW6?tag=jnk00d-20) |
+| **Battery** | EEMB LiPo 3.7 V 500 mAh (562438), JST 2.0 connector | [B09DPPMX14](https://www.amazon.fr/dp/B09DPPMX14?tag=jnk00d-20) | [B095W6742D](https://www.amazon.com/dp/B095W6742D?tag=jnk00d-20) — 403048 cell (50 × 30.5 × 4.3 mm), check it fits the case |
+| **Connectors** | RUNCCI-YUN JST 1.25 mm 2-pin male/female, 15 cm leads (100 pcs) | [B09TDCLZGB](https://www.amazon.fr/dp/B09TDCLZGB?tag=jnk00d-20) | [B09TDCLZGB](https://www.amazon.com/dp/B09TDCLZGB?tag=jnk00d-20) |
+| **Charging cable** | Magnetic USB-C charging cable, 540° rotatable, 5 V/2 A (2-pack) | [B0H6JB5NFQ](https://www.amazon.fr/dp/B0H6JB5NFQ?tag=jnk00d-20) | [B0BPXCVXPZ](https://www.amazon.com/dp/B0BPXCVXPZ?tag=jnk00d-20) |
+| **Fasteners** | M2 countersunk hex-socket screw kit, grade 10.9, nuts + washers + Allen keys (410 pcs) | [B0C1BLSBLW](https://www.amazon.fr/dp/B0C1BLSBLW?tag=jnk00d-20) | [B0CQP76MD8](https://www.amazon.com/dp/B0CQP76MD8?tag=jnk00d-20) (452 pcs) |
 
 ## Contributing
 
