@@ -109,6 +109,9 @@ static void power_tick(void)
      * shows the normal clock. */
     if (asleep != s_asleep) {
         s_asleep = asleep;
+        /* Reposition on the clock while the panel is still blanked, so waking
+         * on any face (tap or wrist raise) never flashes the old one. */
+        if (asleep) ui_show_face(3);
         lv_obj_set_style_bg_opa(sleep_overlay, asleep ? LV_OPA_COVER : LV_OPA_TRANSP, 0);
         watch_display_sleep(asleep);
     }
