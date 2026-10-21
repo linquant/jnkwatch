@@ -74,6 +74,42 @@ void test_sensitivity_clamps(void)
     TEST_ASSERT_FALSE(wf_wrist_update(&w, 0, 0.766, 0.643)); /* ~50deg: no wake at Basse */
 }
 
+/* Issue #22: at Basse sensitivity, the arm-swing of walking (which the pedometer
+ * counts as steps) must NOT wake the screen. We model walking as a viewing-tilt
+ * posture (~30deg) with a strong vertical shake: scale the viewing unit vector
+ * by k so the tilt stays constant but ‖a‖ swings well past the pedometer's
+ * 0.14 g step threshold. */
+static bool feed_view_scaled(wf_wrist_t *w, double k)
+{
+    return wf_wrist_update(w, 0.0, 0.5 * k, 0.866 * k); /* tilt ~30deg, ‖a‖=k */
+}
+
+void test_walking_does_not_wake_at_low(void)
+{
+    wf_wrist_t w; wf_wrist_init(&w);
+    wf_wrist_set_sensitivity(&w, 0);               /* Basse, gate 0.08 g */
+    TEST_ASSERT_FALSE(wf_wrist_update(&w, 0, 1, 0)); /* resting, seeds grav */
+
+    /* Shaking at the viewing tilt: must never fire while motion is high. */
+    for (int i = 0; i < 14; i++)
+        TEST_ASSERT_FALSE(feed_view_scaled(&w, (i & 1) ? 0.6 : 1.4));
+
+    /* Now hold the viewing pose still: the motion decays and a wake fires. */
+    bool woke = false;
+    for (int i = 0; i < 12 && !woke; i++)
+        woke = feed_view_scaled(&w, 1.0);
+    TEST_ASSERT_TRUE(woke);
+}
+
+void test_high_sensitivity_wakes_despite_motion(void)
+{
+    wf_wrist_t w; wf_wrist_init(&w);
+    wf_wrist_set_sensitivity(&w, 2);               /* Haute, gate open */
+    TEST_ASSERT_FALSE(wf_wrist_update(&w, 0, 1, 0));
+    /* Same shaky viewing sample that Basse rejects: Haute wakes anyway. */
+    TEST_ASSERT_TRUE(feed_view_scaled(&w, 1.4));
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -82,5 +118,7 @@ int main(void)
     RUN_TEST(test_hysteresis_midband_is_stable);
     RUN_TEST(test_sensitivity_changes_threshold);
     RUN_TEST(test_sensitivity_clamps);
+    RUN_TEST(test_walking_does_not_wake_at_low);
+    RUN_TEST(test_high_sensitivity_wakes_despite_motion);
     return UNITY_END();
 }

@@ -4,7 +4,15 @@
  * Model: tilt = angle between the screen normal (+Z, out of the display) and
  * "up" (opposite gravity). Screen flat facing up -> 0deg; watch vertical
  * (arm hanging) -> ~90deg; screen facing down -> 180deg. A viewing posture is
- * a small-ish tilt; resting is a large tilt. Hysteresis avoids flapping. */
+ * a small-ish tilt; resting is a large tilt. Hysteresis avoids flapping.
+ *
+ * Motion gate (issue #22 — calibration vs the pedometer): a tilt into the
+ * viewing posture only fires a wake when the smoothed dynamic acceleration
+ * (|‖a‖ - gravity|, same quantity the pedometer thresholds on) is below a
+ * per-level gate. At "Basse" the gate is set BELOW the pedometer's step
+ * threshold (pedometer.c TH_HI = 0.14 g), so the arm-swing of walking — which
+ * registers as steps — never wakes the screen; only a deliberate, settled raise
+ * does. Higher sensitivity relaxes the gate for a more reactive wake. */
 #include <stdbool.h>
 
 /* Default thresholds (= "Moyenne" sensitivity). */
@@ -12,14 +20,19 @@
 #define WF_WRIST_DOWN_TH 75.0 /* tilt above this = resting  */
 
 /* Sensitivity levels: 0 Basse, 1 Moyenne (default), 2 Haute. Higher = wakes at
- * a larger tilt, so a smaller raise triggers it (but more false wakes). */
+ * a larger tilt and tolerates more motion, so a smaller/less-still raise
+ * triggers it (but more false wakes). */
 #define WF_WRIST_SENS_COUNT   3
 #define WF_WRIST_SENS_DEFAULT 1
 
 typedef struct {
     bool   raised;
-    double up_th;   /* tilt below this = viewing (fires a wake)  */
-    double down_th; /* tilt above this = resting (re-arms)       */
+    double up_th;       /* tilt below this = viewing (fires a wake)      */
+    double down_th;     /* tilt above this = resting (re-arms)           */
+    double motion_gate; /* max smoothed |‖a‖-grav| (g) allowed to wake   */
+    double grav;        /* low-pass of ‖a‖, the gravity baseline (g)     */
+    double motion;      /* smoothed dynamic acceleration (g)             */
+    bool   seeded;      /* false until the first sample seeds grav       */
 } wf_wrist_t;
 
 /* Resets state and applies the default (Moyenne) sensitivity. */
