@@ -32,6 +32,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import fr.ponera.jnkwatch.actions.ActionsPrefs
 import fr.ponera.jnkwatch.ble.ConnState
 import fr.ponera.jnkwatch.ble.WatchConnection
@@ -40,6 +41,7 @@ import fr.ponera.jnkwatch.model.ActionButton
 @Composable
 fun ActionsScreen(onBack: () -> Unit) {
     val ctx = LocalContext.current
+    val connState by WatchConnection.client.state.collectAsStateWithLifecycle()
     val buttons = remember { mutableStateListOf<ActionButton>().apply { addAll(ActionsPrefs.load(ctx)) } }
     var saved by remember { mutableStateOf(false) }
 
@@ -80,8 +82,7 @@ fun ActionsScreen(onBack: () -> Unit) {
             Text("Enregistrer et envoyer à la montre")
         }
 
-        val connected = WatchConnection.client.state.value == ConnState.CONNECTED
-        if (saved && !connected) {
+        if (saved && connState != ConnState.CONNECTED) {
             Text("Enregistré. Boutons envoyés à la prochaine connexion de la montre.",
                 color = Color(0xFFE0A050), fontSize = 13.sp)
         } else if (saved) {
