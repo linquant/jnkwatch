@@ -1,7 +1,7 @@
 {
   "major": 1,
   "minor": 4,
-  "size": 1395072,
-  "sha256": "aee8cd3fe3d864cbcb0e3caf7c2b63b5ab1fe0e37f270436a050f690307a6067",
-  "url": "https://github.com/linquant/jnkwatch/releases/download/v1.4/jnkwatch.bin"
+  "size": 1382784,
+  "sha256": "fcf4594fb815978ad22c4b16df4307cfa5ca0a1d5c5f4d50910405e18d688c68",
+  "url": "https://github.com/linquant/jnkwatch/releases/download/dev/jnkwatch.bin"
 }
