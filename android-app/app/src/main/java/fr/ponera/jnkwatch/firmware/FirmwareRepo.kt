@@ -115,8 +115,13 @@ object FirmwareRepo {
     private fun hexToBytes(hex: String): ByteArray {
         val s = hex.trim()
         if (s.length % 2 != 0) return ByteArray(0)
-        return ByteArray(s.length / 2) {
-            ((Character.digit(s[it * 2], 16) shl 4) + Character.digit(s[it * 2 + 1], 16)).toByte()
+        val out = ByteArray(s.length / 2)
+        for (i in out.indices) {
+            val hi = Character.digit(s[2 * i], 16)
+            val lo = Character.digit(s[2 * i + 1], 16)
+            if (hi < 0 || lo < 0) return ByteArray(0)
+            out[i] = ((hi shl 4) + lo).toByte()
         }
+        return out
     }
 }
