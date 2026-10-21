@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Unit tests (CMake + CTest)
+        run: cd firmware-esp32 && ./test.sh
+      - name: AMOLED lit-pixel budget
+        run: cd firmware-esp32 && ./pixels.sh --check
+
+  faces:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Build headless renderers
+        run: |
+          cd firmware-esp32
+          cmake -S . -B build
+          cmake --build build -j"$(nproc)" --target watch_shot watch_pixels
+      - name: Render every face to PNG
+        run: |
+          cd firmware-esp32
+          mkdir -p ../faces
+          for f in 0 1 2 3 4 5 6 7 8; do
+            ./build/watch_shot "../faces/face-$f.png" "$f"
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: faces
+          path: faces/
