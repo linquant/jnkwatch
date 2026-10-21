@@ -49,6 +49,11 @@ android {
         compose = true
     }
 
+    // Local unit tests run on the JVM: android.util.Log must no-op instead of throwing.
+    testOptions {
+        unitTests.isReturnDefaultValues = true
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -68,4 +73,7 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.6")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.6")
     implementation("androidx.core:core-ktx:1.13.1")
+
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.json:json:20240303")   // real JSONObject in JVM tests
 }

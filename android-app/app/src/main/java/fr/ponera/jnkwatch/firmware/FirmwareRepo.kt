@@ -42,10 +42,15 @@ object FirmwareRepo {
 
     suspend fun fetchManifest(url: String = Channel.STABLE.manifestUrl): Manifest? = withContext(Dispatchers.IO) {
         val body = httpGetText(url) ?: return@withContext null
-        try {
+        parseManifest(body)
+    }
+
+    /** Parse a manifest body. No I/O so it can be unit-tested on the JVM. */
+    fun parseManifest(body: String): Manifest? {
+        return try {
             val j = JSONObject(body)
             val sha = hexToBytes(j.getString("sha256"))
-            if (sha.size != 32) { Log.w(TAG, "manifest sha256 not 32 bytes"); return@withContext null }
+            if (sha.size != 32) { Log.w(TAG, "manifest sha256 not 32 bytes"); return null }
             Manifest(
                 major = j.getInt("major"),
                 minor = j.getInt("minor"),
@@ -57,6 +62,15 @@ object FirmwareRepo {
             Log.w(TAG, "manifest parse failed: ${e.message}")
             null
         }
+    }
+
+    /** The image to offer for [watch] on [channel], or null when there is nothing to install.
+     *  Dev always offers its build, at any version, so a test image can replace a release. */
+    fun offerFor(channel: Channel, manifest: Manifest?, watch: Pair<Int, Int>?): Manifest? = when {
+        manifest == null || watch == null -> null
+        channel == Channel.DEV -> manifest
+        manifest.isNewerThan(watch.first, watch.second) -> manifest
+        else -> null
     }
 
     /** Download the image, verifying size and SHA-256. Returns null on any mismatch. */

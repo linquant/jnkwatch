@@ -42,12 +42,12 @@ jobs:
             echo "JNK_KEY_ALIAS=$KEY_ALIAS"
             echo "JNK_KEY_PASSWORD=$KEY_PASSWORD"
           } >> "$GITHUB_ENV"
-      - name: Build debug APK
+      - name: Unit tests, lint, debug APK
         env:
           JNK_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           JNK_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           JNK_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-        run: gradle -p android-app assembleDebug --no-daemon
+        run: gradle -p android-app testDebugUnitTest lintDebug assembleDebug --no-daemon
       - name: Name the asset
         run: cp android-app/app/build/outputs/apk/debug/app-debug.apk jnkwatch-debug.apk
       - uses: actions/upload-artifact@v7

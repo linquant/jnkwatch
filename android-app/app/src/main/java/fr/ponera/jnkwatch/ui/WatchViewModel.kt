@@ -80,13 +80,7 @@ class WatchViewModel(app: Application) : AndroidViewModel(app) {
             try {
                 val ch = _channel.value
                 val m = FirmwareRepo.fetchManifest(ch.manifestUrl)
-                val dev = fwVersion.value
-                _update.value = when {
-                    m == null || dev == null -> null
-                    ch == FirmwareRepo.Channel.DEV -> m
-                    m.isNewerThan(dev.first, dev.second) -> m
-                    else -> null
-                }
+                _update.value = FirmwareRepo.offerFor(ch, m, fwVersion.value)
             } finally {
                 _checking.value = false
             }

@@ -53,3 +53,58 @@ jobs:
       - name: Build the ESP32-S3 image
         # GitHub replaces the image entrypoint, so export.sh is not sourced.
         run: . "$IDF_PATH/export.sh" >/dev/null && idf.py -C firmware-esp32/firmware -DIDF_TARGET=esp32s3 build
+      - uses: actions/upload-artifact@v7
+        with:
+          name: firmware-bin
+          path: firmware-esp32/firmware/build/jnkwatch.bin
+
+  # Publishes the image built above as the `dev` prerelease and refreshes
+  # dev/firmware.json, which is what the app's Dev channel reads. Only on pushes
+  # to dev: a PR builds the firmware but never publishes it.
+  publish-dev:
+    needs: firmware
+    if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: dev
+      - uses: actions/download-artifact@v7
+        with:
+          name: firmware-bin
+          path: out
+      - name: Upload the image to the dev prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view dev >/dev/null 2>&1 ||
+            gh release create dev --prerelease --title "Dev (dernier build)" \
+              --notes "Build automatique de la branche dev, écrasé à chaque push."
+          gh release upload dev out/jnkwatch.bin --clobber
+      - name: Refresh firmware.json
+        run: |
+          MAJOR=$(sed -n 's/^#define WF_FW_MAJOR //p' firmware-esp32/core/version.h)
+          MINOR=$(sed -n 's/^#define WF_FW_MINOR //p' firmware-esp32/core/version.h)
+          python3 - out/jnkwatch.bin "$MAJOR" "$MINOR" <<'PY'
+          import hashlib, json, sys
+          b = open(sys.argv[1], "rb").read()
+          with open("firmware.json", "w") as f:
+              json.dump({
+                  "major": int(sys.argv[2]),
+                  "minor": int(sys.argv[3]),
+                  "size": len(b),
+                  "sha256": hashlib.sha256(b).hexdigest(),
+                  "url": "https://github.com/linquant/jnkwatch/releases/download/dev/jnkwatch.bin",
+              }, f, indent=2)
+              f.write("\n")
+          PY
+          if git diff --quiet firmware.json; then
+            echo "manifest inchangé"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "chore(dev): firmware.json du build $(date -u +%Y-%m-%dT%H:%MZ)" firmware.json
+          git push
