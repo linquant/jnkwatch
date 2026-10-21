@@ -1,6 +1,7 @@
 package fr.ponera.jnkwatch.ui
 
 import android.app.Application
+import android.content.Context
 import android.content.Intent
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
@@ -15,6 +16,7 @@ import kotlinx.coroutines.launch
 
 class WatchViewModel(app: Application) : AndroidViewModel(app) {
     private val client get() = WatchConnection.client
+    private val prefs = app.getSharedPreferences("firmware", Context.MODE_PRIVATE)
 
     val state = client.state
     val settings = client.settings
@@ -29,6 +31,20 @@ class WatchViewModel(app: Application) : AndroidViewModel(app) {
     val update = _update.asStateFlow()
     private val _checking = MutableStateFlow(false)
     val checking = _checking.asStateFlow()
+
+    /** Firmware channel, persisted so the choice survives app restarts. */
+    private val _channel = MutableStateFlow(
+        runCatching { FirmwareRepo.Channel.valueOf(prefs.getString("channel", "")!!) }
+            .getOrDefault(FirmwareRepo.Channel.STABLE)
+    )
+    val channel = _channel.asStateFlow()
+
+    fun setChannel(c: FirmwareRepo.Channel) {
+        if (c == _channel.value) return
+        _channel.value = c
+        prefs.edit().putString("channel", c.name).apply()
+        _update.value = null      // the UI's LaunchedEffect(channel) re-checks on the new channel
+    }
 
     /** Connect the shared client directly (proven path), and start the
      *  foreground service for background SMS/call forwarding (best-effort — a
@@ -54,15 +70,23 @@ class WatchViewModel(app: Application) : AndroidViewModel(app) {
     fun update(s: WatchSettings) = client.writeSettings(s)
     fun syncTime() = client.syncTime()
 
-    /** Fetch the manifest and flag an update if it is newer than the watch's version. */
+    /** Fetch the channel's manifest and flag an update if it is newer than the watch's version.
+     *  On the dev channel the build is always offered, even at the same version, so a
+     *  dev image can be flashed over the installed release. */
     fun checkFirmwareUpdate() {
         if (_checking.value) return
         viewModelScope.launch {
             _checking.value = true
             try {
-                val m = FirmwareRepo.fetchManifest()
+                val ch = _channel.value
+                val m = FirmwareRepo.fetchManifest(ch.manifestUrl)
                 val dev = fwVersion.value
-                _update.value = if (m != null && dev != null && m.isNewerThan(dev.first, dev.second)) m else null
+                _update.value = when {
+                    m == null || dev == null -> null
+                    ch == FirmwareRepo.Channel.DEV -> m
+                    m.isNewerThan(dev.first, dev.second) -> m
+                    else -> null
+                }
             } finally {
                 _checking.value = false
             }

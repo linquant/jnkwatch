@@ -65,9 +65,11 @@ fun WatchScreen(
     val otaProgress by vm.otaProgress.collectAsStateWithLifecycle()
     val update by vm.update.collectAsStateWithLifecycle()
     val checking by vm.checking.collectAsStateWithLifecycle()
+    val channel by vm.channel.collectAsStateWithLifecycle()
 
-    // Auto-check for a firmware update once connected and the watch version is known.
-    LaunchedEffect(state, fwVersion) {
+    // Auto-check for a firmware update once connected, the watch version is known,
+    // and again whenever the channel changes.
+    LaunchedEffect(state, fwVersion, channel) {
         if (state == ConnState.CONNECTED && fwVersion != null) vm.checkFirmwareUpdate()
     }
 
@@ -162,6 +164,8 @@ fun WatchScreen(
                 update = update,
                 checking = checking,
                 progress = otaProgress,
+                channel = channel,
+                onChannel = vm::setChannel,
                 onCheck = vm::checkFirmwareUpdate,
                 onUpdate = vm::updateFirmware,
             )
@@ -178,12 +182,26 @@ private fun FirmwareCard(
     update: FirmwareRepo.Manifest?,
     checking: Boolean,
     progress: OtaProgress,
+    channel: FirmwareRepo.Channel,
+    onChannel: (FirmwareRepo.Channel) -> Unit,
     onCheck: () -> Unit,
     onUpdate: () -> Unit,
 ) {
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("Firmware", color = Color.White, fontWeight = FontWeight.Bold)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(
+                    selected = channel == FirmwareRepo.Channel.STABLE,
+                    onClick = { onChannel(FirmwareRepo.Channel.STABLE) },
+                    label = { Text("Main") },
+                )
+                FilterChip(
+                    selected = channel == FirmwareRepo.Channel.DEV,
+                    onClick = { onChannel(FirmwareRepo.Channel.DEV) },
+                    label = { Text("Dev") },
+                )
+            }
             Text(
                 "Version montre : " + (fwVersion?.let { "v${it.first}.${it.second}" } ?: "…"),
                 color = Color(0xFF9AA7AE), fontSize = 13.sp,
