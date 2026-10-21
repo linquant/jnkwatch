@@ -5,13 +5,13 @@ file(GLOB WATCH_UI   "${CMAKE_CURRENT_LIST_DIR}/../../ui/*.c")
 file(GLOB WATCH_FONT "${CMAKE_CURRENT_LIST_DIR}/../../ui/fonts/*.c")
 
 idf_component_register(
-    SRCS "main.c" "device_hal.c" "read_lcd_id.c" "touch_ft3168.c" "rtc_pcf85063.c" "imu_qmi8658.c" "config_store.c" "ble_server.c" "battery.c" "batlog.c" ${WATCH_CORE} ${WATCH_UI} ${WATCH_FONT}
+    SRCS "main.c" "device_hal.c" "read_lcd_id.c" "touch_ft3168.c" "rtc_pcf85063.c" "imu_qmi8658.c" "config_store.c" "ble_server.c" "battery.c" "batlog.c" "ota_update.c" ${WATCH_CORE} ${WATCH_UI} ${WATCH_FONT}
     INCLUDE_DIRS "."
         "${CMAKE_CURRENT_LIST_DIR}/../../core"
         "${CMAKE_CURRENT_LIST_DIR}/../../ui"
         "${CMAKE_CURRENT_LIST_DIR}/../../ui/fonts"
         "${CMAKE_CURRENT_LIST_DIR}/../../platform"
-    REQUIRES lvgl esp_lvgl_port esp_lcd esp_lcd_sh8601 esp_timer driver esp_psram bt nvs_flash esp_pm esp_adc esp_partition)
+    REQUIRES lvgl esp_lvgl_port esp_lcd esp_lcd_sh8601 esp_timer driver esp_psram bt nvs_flash esp_pm esp_adc esp_partition app_update)
 
 # The generated font uses `#include "lvgl/lvgl.h"` unless this is defined.
 target_compile_definitions(${COMPONENT_LIB} PRIVATE LV_LVGL_H_INCLUDE_SIMPLE=1)

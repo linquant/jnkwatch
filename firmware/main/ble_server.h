@@ -21,3 +21,11 @@ bool ble_conn_params(uint16_t *itvl, uint16_t *latency);
 
 /* Notify the phone that an action button was tapped (BLE ActionEvent char). */
 void ble_action_notify(unsigned action_id);
+
+/* Send an OTA control notification (READY/CREDIT/DONE/ERROR) on the OtaCtrl
+ * characteristic. Called from the OTA task. No-op when disconnected. */
+void ble_ota_notify(const uint8_t *buf, int len);
+
+/* Raise (active=true) / restore (false) the BLE connection parameters for an OTA
+ * transfer. Called by the OTA engine around a transfer. */
+void ble_ota_set_active(bool active);

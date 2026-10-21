@@ -44,7 +44,9 @@ set(SHARED_SRC
   core/level.c
   core/pedometer.c
   core/steps.c
-  core/probes.c)
+  core/probes.c
+  core/sha256.c
+  core/ota_proto.c)
 set(SHARED_INC
   ${CMAKE_CURRENT_SOURCE_DIR}/platform
   ${CMAKE_CURRENT_SOURCE_DIR}/ui
@@ -212,6 +214,16 @@ target_include_directories(test_screentime PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/core
   ${CMAKE_CURRENT_SOURCE_DIR}/third_party/unity/src)
 add_test(NAME screentime COMMAND test_screentime)
+
+add_executable(test_ota_proto
+  tests/test_ota_proto.c
+  core/ota_proto.c
+  core/sha256.c
+  third_party/unity/src/unity.c)
+target_include_directories(test_ota_proto PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/core
+  ${CMAKE_CURRENT_SOURCE_DIR}/third_party/unity/src)
+add_test(NAME ota_proto COMMAND test_ota_proto)
 
 # AMOLED lit-pixel budget guard (renders each face; fails if over budget).
 add_test(NAME amoled_budget COMMAND watch_pixels --check)

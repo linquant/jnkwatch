@@ -18,11 +18,14 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -41,6 +44,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import fr.ponera.jnkwatch.ble.ConnState
+import fr.ponera.jnkwatch.ble.OtaProgress
+import fr.ponera.jnkwatch.firmware.FirmwareRepo
 import fr.ponera.jnkwatch.model.WatchSettings
 
 @Composable
@@ -56,6 +61,15 @@ fun WatchScreen(
     val battery by vm.battery.collectAsStateWithLifecycle()
     val lastAction by vm.lastAction.collectAsStateWithLifecycle()
     val log by vm.log.collectAsStateWithLifecycle()
+    val fwVersion by vm.fwVersion.collectAsStateWithLifecycle()
+    val otaProgress by vm.otaProgress.collectAsStateWithLifecycle()
+    val update by vm.update.collectAsStateWithLifecycle()
+    val checking by vm.checking.collectAsStateWithLifecycle()
+
+    // Auto-check for a firmware update once connected and the watch version is known.
+    LaunchedEffect(state, fwVersion) {
+        if (state == ConnState.CONNECTED && fwVersion != null) vm.checkFirmwareUpdate()
+    }
 
     Column(
         Modifier
@@ -143,10 +157,76 @@ fun WatchScreen(
             lastAction?.let {
                 Text("Dernier bouton montre : #$it", color = Color(0xFF9AA7AE))
             }
+            FirmwareCard(
+                fwVersion = fwVersion,
+                update = update,
+                checking = checking,
+                progress = otaProgress,
+                onCheck = vm::checkFirmwareUpdate,
+                onUpdate = vm::updateFirmware,
+            )
         }
 
         Spacer(Modifier.height(4.dp))
         Text(log, color = Color(0xFF5A666C), fontSize = 13.sp)
+    }
+}
+
+@Composable
+private fun FirmwareCard(
+    fwVersion: Pair<Int, Int>?,
+    update: FirmwareRepo.Manifest?,
+    checking: Boolean,
+    progress: OtaProgress,
+    onCheck: () -> Unit,
+    onUpdate: () -> Unit,
+) {
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text("Firmware", color = Color.White, fontWeight = FontWeight.Bold)
+            Text(
+                "Version montre : " + (fwVersion?.let { "v${it.first}.${it.second}" } ?: "…"),
+                color = Color(0xFF9AA7AE), fontSize = 13.sp,
+            )
+            when (val p = progress) {
+                is OtaProgress.Running -> {
+                    Text("Mise à jour… ${p.percent} %", color = Color.White)
+                    LinearProgressIndicator(
+                        progress = { p.percent / 100f },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Text("Ne débranche pas la montre.", color = Color(0xFF9AA7AE), fontSize = 12.sp)
+                }
+                is OtaProgress.Done -> {
+                    Text("✓ Mise à jour installée — la montre redémarre.", color = Color(0xFF54E08A))
+                    FirmwareAction(update, checking, onCheck, onUpdate)
+                }
+                is OtaProgress.Error -> {
+                    Text("Échec : ${p.message}", color = Color(0xFFFF6B6B), fontSize = 13.sp)
+                    FirmwareAction(update, checking, onCheck, onUpdate)
+                }
+                OtaProgress.Idle -> FirmwareAction(update, checking, onCheck, onUpdate)
+            }
+        }
+    }
+}
+
+@Composable
+private fun FirmwareAction(
+    update: FirmwareRepo.Manifest?,
+    checking: Boolean,
+    onCheck: () -> Unit,
+    onUpdate: () -> Unit,
+) {
+    if (update != null) {
+        Text("Disponible : v${update.major}.${update.minor}", color = Color(0xFF54E08A), fontSize = 13.sp)
+        Button(onClick = onUpdate, modifier = Modifier.fillMaxWidth()) {
+            Text("Installer v${update.major}.${update.minor}")
+        }
+    } else {
+        OutlinedButton(onClick = onCheck, enabled = !checking, modifier = Modifier.fillMaxWidth()) {
+            Text(if (checking) "Vérification…" else "Vérifier les mises à jour")
+        }
     }
 }
 

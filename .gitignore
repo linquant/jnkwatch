@@ -43,3 +43,7 @@ compile_commands.json
 
 # Local Claude Code MCP config (environment-specific, not shared)
 /.mcp.json
+
+# Python bytecode cache (tools/)
+__pycache__/
+*.pyc

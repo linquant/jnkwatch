@@ -17,6 +17,8 @@ object BleUuids {
     val STATUS: UUID = u(0x07)
     val WEATHER: UUID = u(0x08)
     val PROBE: UUID = u(0x09)
+    val OTA_CTRL: UUID = u(0x0A)   // START/ABORT/COMMIT write + READY/CREDIT/DONE/ERROR notify
+    val OTA_DATA: UUID = u(0x0B)   // [seq u16][payload] write-without-response
 
     /** Standard Client Characteristic Configuration Descriptor. */
     val CCCD: UUID = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")

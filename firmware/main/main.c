@@ -27,6 +27,8 @@
 #include "device_hal.h"
 #include "ble_server.h"
 #include "battery.h"
+#include "ota_update.h"
+#include "esp_ota_ops.h"
 #include "display.h"   /* WATCH_SIZE */
 #include "ui.h"
 #include "panel_ctrl.h"
@@ -241,6 +243,7 @@ void app_main(void)
     /* NVS + inbound-config queue first (NVS is also needed by BLE bonding). */
     device_hal_init();
     config_store_init();
+    ota_update_init();   /* OTA flash task + queue (fed by the BLE OTA chars) */
 
     /* Touch first, like the Waveshare demo: the FT3168 reset is tied to the
      * OLED_RESET line (GPIO21), so bringing touch up BEFORE the LCD lets the
@@ -361,4 +364,18 @@ void app_main(void)
     power_mgmt_init();
 
     ESP_LOGI(TAG, "UI up (%dx%d), touch ready, BLE up", LCD_H, LCD_V);
+
+    /* OTA rollback confirm: if we just booted a freshly-flashed image (state
+     * PENDING_VERIFY), reaching here means display + LVGL + BLE all came up, so
+     * mark it valid and cancel the pending rollback. A boot that crashes before
+     * this is rolled back to the previous slot by the bootloader. */
+    {
+        const esp_partition_t *run = esp_ota_get_running_partition();
+        esp_ota_img_states_t st;
+        if (run && esp_ota_get_state_partition(run, &st) == ESP_OK &&
+            st == ESP_OTA_IMG_PENDING_VERIFY) {
+            esp_ota_mark_app_valid_cancel_rollback();
+            ESP_LOGI(TAG, "OTA image confirmed valid (%s)", run->label);
+        }
+    }
 }

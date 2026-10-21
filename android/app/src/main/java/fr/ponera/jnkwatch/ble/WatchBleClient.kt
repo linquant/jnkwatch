@@ -18,14 +18,25 @@ import android.os.Looper
 import android.util.Log
 import fr.ponera.jnkwatch.model.ActionButton
 import fr.ponera.jnkwatch.model.WatchSettings
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.withTimeoutOrNull
 
 enum class ConnState { DISCONNECTED, SCANNING, CONNECTING, CONNECTED }
+
+/** Progress of a BLE OTA firmware transfer, surfaced to the UI. */
+sealed class OtaProgress {
+    object Idle : OtaProgress()
+    data class Running(val percent: Int) : OtaProgress()
+    object Done : OtaProgress()
+    data class Error(val message: String) : OtaProgress()
+}
 
 /**
  * Minimal, self-contained BLE client for the JNKWatch. Callback-based Android
@@ -63,6 +74,21 @@ class WatchBleClient(private val context: Context) {
 
     private val _log = MutableStateFlow("Prêt")
     val log: StateFlow<String> = _log.asStateFlow()
+
+    // Firmware version read from the Status characteristic (major, minor).
+    private val _fwVersion = MutableStateFlow<Pair<Int, Int>?>(null)
+    val fwVersion: StateFlow<Pair<Int, Int>?> = _fwVersion.asStateFlow()
+
+    // OTA transfer progress, driven by performOta().
+    private val _otaProgress = MutableStateFlow<OtaProgress>(OtaProgress.Idle)
+    val otaProgress: StateFlow<OtaProgress> = _otaProgress.asStateFlow()
+
+    // OTA control notifications (READY/CREDIT/DONE/ERROR) delivered to performOta.
+    private val otaChannel = Channel<ByteArray>(Channel.UNLIMITED)
+
+    @Volatile private var negotiatedMtu = 23
+    // Completion signal for the current awaited write (set by writeAwait).
+    @Volatile private var pendingWrite: CompletableDeferred<Int>? = null
 
     private fun logMsg(m: String) { Log.i(TAG, m); _log.value = m }
 
@@ -146,6 +172,7 @@ class WatchBleClient(private val context: Context) {
         try { gatt?.close() } catch (_: Exception) {}
         gatt = null
         synchronized(lock) { ops.clear(); opInFlight = false }
+        pendingWrite?.let { pendingWrite = null; it.complete(-1) }  // unblock any awaited write
         _settings.value = null
         _battery.value = null
         _state.value = ConnState.DISCONNECTED
@@ -164,6 +191,7 @@ class WatchBleClient(private val context: Context) {
         }
 
         override fun onMtuChanged(g: BluetoothGatt, mtu: Int, status: Int) {
+            negotiatedMtu = mtu
             g.discoverServices()
         }
 
@@ -171,11 +199,13 @@ class WatchBleClient(private val context: Context) {
             val svc = g.getService(BleUuids.SERVICE)
             if (svc == null) { logMsg("Service JNKWatch introuvable"); g.disconnect(); return }
             _state.value = ConnState.CONNECTED
+            _otaProgress.value = OtaProgress.Idle   // clear any stale Done/Error from a prior session
             logMsg("Connecté")
             // On connect: subscribe to Settings + Action events, read current
             // settings, sync the clock.
             subscribe(BleUuids.SETTINGS)
             subscribe(BleUuids.ACTION_EVENT)
+            subscribe(BleUuids.OTA_CTRL)
             readChar(BleUuids.SETTINGS)
             readChar(BleUuids.STATUS)
             syncTime()
@@ -218,7 +248,10 @@ class WatchBleClient(private val context: Context) {
 
         override fun onCharacteristicWrite(
             g: BluetoothGatt, ch: BluetoothGattCharacteristic, status: Int,
-        ) { opComplete() }
+        ) {
+            pendingWrite?.let { pendingWrite = null; it.complete(status) }
+            opComplete()
+        }
 
         override fun onDescriptorWrite(
             g: BluetoothGatt, d: BluetoothGattDescriptor, status: Int,
@@ -231,7 +264,10 @@ class WatchBleClient(private val context: Context) {
             BleUuids.STATUS -> if (value.isNotEmpty()) {
                 val pct = value[0].toInt() and 0xFF
                 _battery.value = if (pct <= 100) pct else null  // 0xFF = unknown (charging since boot)
+                if (value.size >= 3)
+                    _fwVersion.value = (value[1].toInt() and 0xFF) to (value[2].toInt() and 0xFF)
             }
+            BleUuids.OTA_CTRL -> otaChannel.trySend(value)
             BleUuids.ACTION_EVENT -> if (value.size >= 4) {
                 val id = (value[0].toInt() and 0xFF) or ((value[1].toInt() and 0xFF) shl 8) or
                     ((value[2].toInt() and 0xFF) shl 16) or ((value[3].toInt() and 0xFF) shl 24)
@@ -324,6 +360,108 @@ class WatchBleClient(private val context: Context) {
         logMsg("Notif → $app : $title")
     }
 
+    // --- OTA firmware update --------------------------------------------------
+    private class OtaException(msg: String) : Exception(msg)
+
+    /** Surface an OTA failure that happened before the transfer (e.g. download). */
+    fun reportOtaError(message: String) { _otaProgress.value = OtaProgress.Error(message) }
+
+    /**
+     * Stream a firmware image to the watch (OtaCtrl/OtaData). Suspends until the
+     * transfer finishes; updates [otaProgress] throughout. On success the watch
+     * reboots into the new slot. Safe to interrupt: the running firmware is
+     * untouched until COMMIT succeeds (dual-slot + rollback on the device).
+     */
+    suspend fun performOta(image: ByteArray, sha256: ByteArray) {
+        if (_state.value != ConnState.CONNECTED) {
+            _otaProgress.value = OtaProgress.Error("Montre non connectée"); return
+        }
+        if (sha256.size != 32) {
+            _otaProgress.value = OtaProgress.Error("SHA-256 invalide"); return
+        }
+        _otaProgress.value = OtaProgress.Running(0)
+        while (otaChannel.tryReceive().isSuccess) { /* drop stale notifications */ }
+        gatt?.requestConnectionPriority(BluetoothGatt.CONNECTION_PRIORITY_HIGH)
+        try {
+            val chunk = (negotiatedMtu - 5).coerceIn(20, 244)
+            val size = image.size
+
+            // START: [0x01][size u32][chunk u16][sha 32]
+            val start = java.io.ByteArrayOutputStream()
+            start.write(0x01)
+            start.write(size and 0xFF); start.write((size shr 8) and 0xFF)
+            start.write((size shr 16) and 0xFF); start.write((size ushr 24) and 0xFF)
+            start.write(chunk and 0xFF); start.write((chunk shr 8) and 0xFF)
+            start.write(sha256)
+            if (writeAwait(BleUuids.OTA_CTRL, start.toByteArray(), noResponse = false) != 0)
+                throw OtaException("Échec d'envoi START")
+            val ready = awaitOta(0x81, 10_000) ?: throw OtaException("Pas de réponse (READY)")
+            if ((ready.getOrElse(1) { 1 }).toInt() != 0) throw OtaException("Montre a refusé le START")
+            val accepted = (((ready.getOrElse(2) { 0 }.toInt() and 0xFF)) or
+                            ((ready.getOrElse(3) { 0 }.toInt() and 0xFF) shl 8)).coerceIn(20, chunk)
+            logMsg("OTA démarré ($size o, blocs $accepted o)")
+
+            // DATA: [seq u16][payload]
+            var off = 0; var seq = 0
+            while (off < size) {
+                val n = minOf(accepted, size - off)
+                val f = ByteArray(2 + n)
+                f[0] = (seq and 0xFF).toByte(); f[1] = ((seq shr 8) and 0xFF).toByte()
+                System.arraycopy(image, off, f, 2, n)
+                if (writeAwait(BleUuids.OTA_DATA, f, noResponse = true) != 0)
+                    throw OtaException("Échec d'envoi du bloc $seq")
+                off += n; seq++
+                _otaProgress.value = OtaProgress.Running((off.toLong() * 100 / size).toInt())
+                pollOtaError()   // throws if the watch reported an error mid-stream
+            }
+
+            // COMMIT -> DONE
+            if (writeAwait(BleUuids.OTA_CTRL, byteArrayOf(0x03), noResponse = false) != 0)
+                throw OtaException("Échec d'envoi COMMIT")
+            val done = awaitOta(0x83, 15_000) ?: throw OtaException("Pas de confirmation (DONE)")
+            if ((done.getOrElse(1) { 1 }).toInt() != 0) throw OtaException("Validation image échouée")
+            _otaProgress.value = OtaProgress.Done
+            logMsg("OTA terminé — la montre redémarre")
+        } catch (e: Exception) {
+            runCatching { writeAwait(BleUuids.OTA_CTRL, byteArrayOf(0x02), noResponse = false) }
+            _otaProgress.value = OtaProgress.Error(e.message ?: "Erreur OTA")
+            logMsg("OTA échec: ${e.message}")
+        } finally {
+            gatt?.requestConnectionPriority(BluetoothGatt.CONNECTION_PRIORITY_LOW_POWER)
+        }
+    }
+
+    /** Wait for an OTA notification with first byte == [code]; an ERROR (0x84)
+     *  throws, other codes (e.g. CREDIT) are ignored. Null on timeout. */
+    private suspend fun awaitOta(code: Int, timeoutMs: Long): ByteArray? =
+        withTimeoutOrNull(timeoutMs) {
+            while (true) {
+                val f = otaChannel.receive()
+                if (f.isEmpty()) continue
+                when (f[0].toInt() and 0xFF) {
+                    0x84 -> throw OtaException(otaErrName(f.getOrElse(1) { 0 }.toInt() and 0xFF))
+                    code -> return@withTimeoutOrNull f
+                    else -> {}
+                }
+            }
+            @Suppress("UNREACHABLE_CODE") null
+        }
+
+    /** Non-blocking drain of pending OTA notifications; throws on a reported error. */
+    private fun pollOtaError() {
+        while (true) {
+            val f = otaChannel.tryReceive().getOrNull() ?: return
+            if (f.isNotEmpty() && (f[0].toInt() and 0xFF) == 0x84)
+                throw OtaException(otaErrName(f.getOrElse(1) { 0 }.toInt() and 0xFF))
+        }
+    }
+
+    private fun otaErrName(code: Int): String = when (code) {
+        1 -> "taille invalide"; 2 -> "erreur flash"; 3 -> "SHA-256 incohérent"
+        4 -> "batterie trop faible"; 5 -> "bloc hors séquence"; 6 -> "délai dépassé"
+        7 -> "init flash échouée"; 8 -> "état invalide"; else -> "erreur $code"
+    }
+
     // --- Low-level GATT helpers (queued) --------------------------------------
     private fun charOf(uuid: java.util.UUID): BluetoothGattCharacteristic? =
         gatt?.getService(BleUuids.SERVICE)?.getCharacteristic(uuid)
@@ -343,6 +481,29 @@ class WatchBleClient(private val context: Context) {
             ch.writeType = BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
             @Suppress("DEPRECATION") run { ch.value = value; g.writeCharacteristic(ch) }
         }
+    }
+
+    /** Queued write that suspends until onCharacteristicWrite; returns the GATT
+     *  status (0 = success, -1 if it could not be submitted). */
+    private suspend fun writeAwait(uuid: java.util.UUID, value: ByteArray, noResponse: Boolean): Int {
+        val def = CompletableDeferred<Int>()
+        enqueue {
+            val ch = charOf(uuid); val g = gatt
+            if (ch == null || g == null) { def.complete(-1); opComplete(); return@enqueue }
+            pendingWrite = def
+            val type = if (noResponse) BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE
+                       else BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
+            val submitted: Boolean = try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    g.writeCharacteristic(ch, value, type) ==
+                        android.bluetooth.BluetoothStatusCodes.SUCCESS
+                } else {
+                    @Suppress("DEPRECATION") run { ch.writeType = type; ch.value = value; g.writeCharacteristic(ch) }
+                }
+            } catch (_: Exception) { false }
+            if (!submitted) { pendingWrite = null; def.complete(-1); opComplete() }
+        }
+        return def.await()
     }
 
     private fun subscribe(uuid: java.util.UUID) = enqueue {

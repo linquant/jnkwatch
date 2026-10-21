@@ -4,7 +4,7 @@ Single source of truth for the GATT contract shared by the **watch firmware**
 (`firmware/main/ble_server.c`, NimBLE GATT server) and the **Android app**
 (`android/`). Bump the version and keep both sides in lock-step when changing it.
 
-**Protocol version: 2**
+**Protocol version: 3**
 
 ## Link
 - **Role**: the watch is the GATT **peripheral**; the phone is the **central**.
@@ -36,6 +36,8 @@ Base UUID family `6a4e01NN-9b7a-4f2c-8d61-2a1b3c4d5e6f` ("6a4e" = 'j','N').
 | Status | `6a4e0107-` | Read, Notify | 3 |
 | Weather | `6a4e0108-` | Write | var |
 | Probe | `6a4e0109-` | Write | var |
+| OtaCtrl | `6a4e010A-` | Write, Notify | var |
+| OtaData | `6a4e010B-` | Write, WriteNR | var |
 
 ### Settings — `6a4e0101` (R / W / Notify), 7 bytes
 Mirrors `wf_settings_t` + accent. Write applies **and persists** (NVS); read
@@ -125,6 +127,48 @@ how fresh each value is; no notification is spawned.
 The phone assigns `slot` as the probe's position among the probes bound to the
 face, so values keep a stable row. Probes left as notifications use NotifPush
 (`6a4e0103`) instead.
+
+### OTA firmware update — `6a4e010A` (OtaCtrl, W/Notify) + `6a4e010B` (OtaData, W/WriteNR)
+Pushes a new firmware image to the watch over BLE. The watch writes it to the
+**inactive** OTA app slot (`esp_ota_*`) and, on success, reboots into it; a boot
+that never confirms healthy is rolled back automatically by the bootloader. The
+pure framing/state-machine logic lives in `core/ota_proto.c` (unit-tested); the
+device flash glue is `firmware/main/ota_update.c`. Requires the OTA partition
+table (otadata + ota_0 + ota_1) — the migration to that table is a one-time USB
+flash (a phone cannot deliver a partition table).
+
+**Security (v1): the transfer is unauthenticated** — consistent with the
+currently unencrypted link. Anyone in BLE range could push firmware; hardening
+(signed image / Secure Boot v2) is tracked alongside
+`docs/tickets/reenable-ble-encryption.md`.
+
+All integers little-endian. The SHA-256 is over the whole image, big-endian digest.
+
+**OtaCtrl — phone → watch (write-with-response):**
+
+| op | name | layout | bytes |
+|----|------|--------|-------|
+| 0x01 | START | `[0x01][total_size u32][chunk_size u16][sha256 32B]` | 39 |
+| 0x02 | ABORT | `[0x02]` | 1 |
+| 0x03 | COMMIT | `[0x03]` | 1 |
+
+**OtaCtrl — watch → phone (notify):**
+
+| code | name | layout | meaning |
+|------|------|--------|---------|
+| 0x81 | READY | `[0x81][status u8][chunk_size u16][window u16]` | START ack; status 0=ok; `chunk_size` clamped/accepted; `window` = initial credits |
+| 0x82 | CREDIT | `[0x82][next_seq u16][bytes_recvd u32][credits u16]` | more credits + progress |
+| 0x83 | DONE | `[0x83][status u8]` | `esp_ota_end` result; 0=ok, then the watch reboots |
+| 0x84 | ERROR | `[0x84][code u8]` | abort: 1 bad_size · 2 flash · 3 sha_mismatch · 4 low_battery · 5 out_of_order · 6 timeout · 7 begin_fail · 8 bad_state |
+
+**OtaData — phone → watch (write-without-response):** `[seq u16][payload …]`.
+`seq` = 0-based chunk index; payload length = negotiated `chunk_size` (last chunk
+shorter). The watch checks `seq == expected`, else ERROR(5) and aborts.
+
+Flow: phone sends START (gets READY with `window` credits), then streams DATA
+chunks up to the outstanding credit, replenished by CREDIT notifications; finally
+COMMIT (gets DONE). The phone raises the connection priority during the transfer
+and restores low-power after. `chunk_size` ≤ MTU − 5 (≈242 B at MTU 247).
 
 ## Typical session
 1. App scans for `JNKWatch`, connects, bonds, negotiates MTU 247.

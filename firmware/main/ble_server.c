@@ -8,6 +8,8 @@
 #include "rtc_pcf85063.h"
 #include "notify.h"         /* wf_notif_t + field lengths */
 #include "wrist.h"          /* WF_WRIST_SENS_COUNT / WF_WRIST_SENS_DEFAULT */
+#include "ota_update.h"     /* OTA engine hand-off */
+#include "ota_proto.h"      /* OTA frame sizes / limits */
 
 #include <string.h>
 #include <time.h>
@@ -32,8 +34,9 @@ static const char *TAG = "ble";
     0x6f, 0x5e, 0x4d, 0x3c, 0x1b, 0x2a, 0x61, 0x8d, \
     0x2c, 0x4f, 0x7a, 0x9b, (nn), 0x01, 0x4e, 0x6a)
 
-#define FW_MAJOR 1
-#define FW_MINOR 0
+#include "version.h"   /* WF_FW_MAJOR / WF_FW_MINOR (shared with the debug face) */
+#define FW_MAJOR WF_FW_MAJOR
+#define FW_MINOR WF_FW_MINOR
 
 static const ble_uuid128_t svc_uuid       = JNK_UUID128(0x00);
 static const ble_uuid128_t settings_uuid  = JNK_UUID128(0x01);
@@ -45,10 +48,13 @@ static const ble_uuid128_t actionevt_uuid = JNK_UUID128(0x06);
 static const ble_uuid128_t status_uuid    = JNK_UUID128(0x07);
 static const ble_uuid128_t weather_uuid   = JNK_UUID128(0x08);
 static const ble_uuid128_t probe_uuid     = JNK_UUID128(0x09);
+static const ble_uuid128_t otactrl_uuid   = JNK_UUID128(0x0A);
+static const ble_uuid128_t otadata_uuid   = JNK_UUID128(0x0B);
 
 static uint8_t  s_addr_type;
 static uint16_t s_conn = BLE_HS_CONN_HANDLE_NONE;
 static uint16_t s_settings_val_handle;
+static uint16_t s_ota_ctrl_val_handle;
 static uint16_t s_action_val_handle;
 
 static int  gap_event(struct ble_gap_event *event, void *arg);
@@ -295,6 +301,32 @@ static int probe_access(uint16_t c, uint16_t a, struct ble_gatt_access_ctxt *ctx
     return 0;
 }
 
+/* OtaCtrl (W): START/ABORT/COMMIT. Enqueue-only -> OTA task (never block host). */
+static int otactrl_access(uint16_t c, uint16_t a, struct ble_gatt_access_ctxt *ctxt, void *arg)
+{
+    (void)c; (void)a; (void)arg;
+    if (ctxt->op != BLE_GATT_ACCESS_OP_WRITE_CHR) return BLE_ATT_ERR_UNLIKELY;
+    uint8_t b[WF_OTA_START_LEN];
+    uint16_t len = 0;
+    if (ble_hs_mbuf_to_flat(ctxt->om, b, sizeof(b), &len) != 0 || len < 1)
+        return BLE_ATT_ERR_INVALID_ATTR_VALUE_LEN;
+    ota_update_on_ctrl(b, len);
+    return 0;
+}
+
+/* OtaData (W / WriteNR): [seq u16][payload]. Enqueue-only -> OTA task. */
+static int otadata_access(uint16_t c, uint16_t a, struct ble_gatt_access_ctxt *ctxt, void *arg)
+{
+    (void)c; (void)a; (void)arg;
+    if (ctxt->op != BLE_GATT_ACCESS_OP_WRITE_CHR) return BLE_ATT_ERR_UNLIKELY;
+    uint8_t b[WF_OTA_DATA_HDR + WF_OTA_MAX_CHUNK];
+    uint16_t len = 0;
+    if (ble_hs_mbuf_to_flat(ctxt->om, b, sizeof(b), &len) != 0 || len < WF_OTA_DATA_HDR)
+        return BLE_ATT_ERR_INVALID_ATTR_VALUE_LEN;
+    ota_update_on_data(b, len);
+    return 0;
+}
+
 static const struct ble_gatt_svc_def gatt_svcs[] = {
     {
         .type = BLE_GATT_SVC_TYPE_PRIMARY,
@@ -357,6 +389,19 @@ static const struct ble_gatt_svc_def gatt_svcs[] = {
                 .flags = BLE_GATT_CHR_F_WRITE,
                 .descriptors = CUD("Probe"),
             },
+            {
+                .uuid = &otactrl_uuid.u,
+                .access_cb = otactrl_access,
+                .flags = BLE_GATT_CHR_F_WRITE | BLE_GATT_CHR_F_NOTIFY,
+                .val_handle = &s_ota_ctrl_val_handle,
+                .descriptors = CUD("OTA control"),
+            },
+            {
+                .uuid = &otadata_uuid.u,
+                .access_cb = otadata_access,
+                .flags = BLE_GATT_CHR_F_WRITE | BLE_GATT_CHR_F_WRITE_NO_RSP,
+                .descriptors = CUD("OTA data"),
+            },
             { 0 },
         },
     },
@@ -384,6 +429,14 @@ void ble_action_notify(unsigned action_id)
     for (int i = 0; i < 4; i++) buf[i] = (uint8_t)(action_id >> (8 * i));
     struct os_mbuf *om = ble_hs_mbuf_from_flat(buf, sizeof(buf));
     if (om) ble_gatts_notify_custom(s_conn, s_action_val_handle, om);
+}
+
+/* OTA control notifications (READY/CREDIT/DONE/ERROR), called from the OTA task. */
+void ble_ota_notify(const uint8_t *buf, int len)
+{
+    if (s_conn == BLE_HS_CONN_HANDLE_NONE || len <= 0) return;
+    struct os_mbuf *om = ble_hs_mbuf_from_flat(buf, (uint16_t)len);
+    if (om) ble_gatts_notify_custom(s_conn, s_ota_ctrl_val_handle, om);
 }
 
 static void advertise(void)
@@ -427,10 +480,12 @@ static void request_low_power_conn_params(uint16_t conn_handle);
 #define CONN_FAST_ITVL    24   /* 30 ms in 1.25 ms units */
 static esp_timer_handle_t s_conn_timer;
 static int s_conn_tries;
+static volatile bool s_ota_active;   /* true during an OTA transfer: keep fast params */
 
 static void conn_retry_cb(void *arg)
 {
     (void)arg;
+    if (s_ota_active) return;   /* don't downshift mid-OTA */
     if (s_conn != BLE_HS_CONN_HANDLE_NONE && s_conn_tries < CONN_RETRIES) {
         s_conn_tries++;
         request_low_power_conn_params(s_conn);
@@ -459,6 +514,36 @@ static void request_low_power_conn_params(uint16_t conn_handle)
     };
     int rc = ble_gap_update_params(conn_handle, &p);
     ESP_LOGI(TAG, "conn param request (45-70ms, lat 20, sup 6s): rc=%d", rc);
+}
+
+/* Fast parameters for an OTA transfer: short interval, no slave latency so every
+ * connection event carries data. sup 4 s > 2*itvl_max*(latency+1) = 60 ms. */
+static void request_fast_conn_params(uint16_t conn_handle)
+{
+    struct ble_gap_upd_params p = {
+        .itvl_min = 12,              /* 15 ms */
+        .itvl_max = 24,             /* 30 ms */
+        .latency = 0,
+        .supervision_timeout = 400, /* 4 s   */
+        .min_ce_len = 0,
+        .max_ce_len = 0,
+    };
+    int rc = ble_gap_update_params(conn_handle, &p);
+    ESP_LOGI(TAG, "OTA fast conn param request (15-30ms, lat 0): rc=%d", rc);
+}
+
+/* Called by the OTA engine around a transfer: raise throughput while active,
+ * restore the power-friendly params after. */
+void ble_ota_set_active(bool active)
+{
+    s_ota_active = active;
+    if (s_conn == BLE_HS_CONN_HANDLE_NONE) return;
+    if (active) {
+        request_fast_conn_params(s_conn);
+    } else {
+        s_conn_tries = 0;
+        request_low_power_conn_params(s_conn);
+    }
 }
 
 bool ble_is_connected(void)
@@ -504,7 +589,7 @@ static int gap_event(struct ble_gap_event *event, void *arg)
     case BLE_GAP_EVENT_CONN_UPDATE: {
         /* Log the parameters actually in force after negotiation. */
         note_conn_params(event->conn_update.conn_handle);
-        if (s_itvl < CONN_FAST_ITVL && s_conn_tries < CONN_RETRIES)
+        if (!s_ota_active && s_itvl < CONN_FAST_ITVL && s_conn_tries < CONN_RETRIES)
             schedule_conn_retry();   /* phone went (back) to a fast interval */
         struct ble_gap_conn_desc d;
         if (ble_gap_conn_find(event->conn_update.conn_handle, &d) == 0)
@@ -516,6 +601,7 @@ static int gap_event(struct ble_gap_event *event, void *arg)
     case BLE_GAP_EVENT_DISCONNECT:
         ESP_LOGI(TAG, "disconnected (reason %d)", event->disconnect.reason);
         s_conn = BLE_HS_CONN_HANDLE_NONE;
+        if (s_ota_active) { s_ota_active = false; ota_update_abort(); }
         advertise();
         return 0;
     case BLE_GAP_EVENT_ADV_COMPLETE:
