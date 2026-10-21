@@ -51,4 +51,5 @@ jobs:
         with:
           submodules: recursive
       - name: Build the ESP32-S3 image
-        run: idf.py -C firmware-esp32/firmware -DIDF_TARGET=esp32s3 build
+        # GitHub replaces the image entrypoint, so export.sh is not sourced.
+        run: . "$IDF_PATH/export.sh" >/dev/null && idf.py -C firmware-esp32/firmware -DIDF_TARGET=esp32s3 build
