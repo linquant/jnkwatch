@@ -65,6 +65,11 @@ jobs:
     needs: firmware
     if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
     runs-on: ubuntu-latest
+    # Two quick pushes would otherwise upload/clobber in parallel and leave a
+    # manifest whose sha256 does not match the asset on the release.
+    concurrency:
+      group: publish-dev
+      cancel-in-progress: false
     permissions:
       contents: write
     steps:
