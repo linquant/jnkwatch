@@ -39,3 +39,16 @@ jobs:
         with:
           name: faces
           path: faces/
+
+  # The host tests never touch firmware/main/*.c or platform/ (ESP-IDF HAL),
+  # so a hardware-only break would only show up on the watch. Build the real
+  # image with the same ESP-IDF release as the maintainer's toolchain.
+  firmware:
+    runs-on: ubuntu-latest
+    container: espressif/idf:release-v5.4
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+      - name: Build the ESP32-S3 image
+        run: idf.py -C firmware-esp32/firmware -DIDF_TARGET=esp32s3 build
