@@ -9,7 +9,7 @@ jobs:
   tests:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           submodules: recursive
       - name: Unit tests (CMake + CTest)
@@ -20,7 +20,7 @@ jobs:
   faces:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           submodules: recursive
       - name: Build headless renderers
@@ -35,7 +35,7 @@ jobs:
           for f in 0 1 2 3 4 5 6 7 8; do
             ./build/watch_shot "../faces/face-$f.png" "$f"
           done
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: faces
           path: faces/
