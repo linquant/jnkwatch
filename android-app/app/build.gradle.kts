@@ -16,9 +16,28 @@ android {
         versionName = "0.1"
     }
 
+    // Stable signing key for distributed builds (CI). Local builds fall back to the
+    // default debug key. Without a shared key, an updated APK can't install over the
+    // previous one (INSTALL_FAILED_UPDATE_INCOMPATIBLE) and app data is lost.
+    val ciKeystore = System.getenv("JNK_KEYSTORE")
+    signingConfigs {
+        if (ciKeystore != null) {
+            create("shared") {
+                storeFile = file(ciKeystore)
+                storePassword = System.getenv("JNK_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("JNK_KEY_ALIAS")
+                keyPassword = System.getenv("JNK_KEY_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
+        debug {
+            if (ciKeystore != null) signingConfig = signingConfigs.getByName("shared")
+        }
         release {
             isMinifyEnabled = false
+            if (ciKeystore != null) signingConfig = signingConfigs.getByName("shared")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",

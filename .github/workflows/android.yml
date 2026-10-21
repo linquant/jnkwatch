@@ -1,0 +1,61 @@
+name: Android
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.9"
+      # The signing key lives in the repo secrets. Without it the build still works
+      # but falls back to the throwaway debug key (can't update an installed app).
+      - name: Install signing key
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -z "$KEYSTORE_B64" ]; then
+            echo "::warning::ANDROID_KEYSTORE_B64 absent — APK signé avec la clé debug jetable"
+            exit 0
+          fi
+          echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/jnkwatch.jks"
+          {
+            echo "JNK_KEYSTORE=$RUNNER_TEMP/jnkwatch.jks"
+            echo "JNK_KEYSTORE_PASSWORD=$KEYSTORE_PASSWORD"
+            echo "JNK_KEY_ALIAS=$KEY_ALIAS"
+            echo "JNK_KEY_PASSWORD=$KEY_PASSWORD"
+          } >> "$GITHUB_ENV"
+      - name: Build debug APK
+        env:
+          JNK_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          JNK_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          JNK_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: gradle -p android-app assembleDebug --no-daemon
+      - name: Name the asset
+        run: cp android-app/app/build/outputs/apk/debug/app-debug.apk jnkwatch-debug.apk
+      - uses: actions/upload-artifact@v7
+        with:
+          name: jnkwatch-debug-apk
+          path: jnkwatch-debug.apk
+      - name: Attach to the release
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${GITHUB_REF_NAME}" jnkwatch-debug.apk --clobber
