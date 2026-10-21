@@ -8,5 +8,5 @@ cmake -S . -B build >/dev/null
 cmake --build build -j"$(nproc)" \
   --target test_watchface_logic test_dotfont test_timer \
            test_settings test_wrist test_activity test_notify test_actions \
-           test_pixelstats test_screentime watch_pixels >/dev/null
+           test_pixelstats test_screentime test_weather watch_pixels >/dev/null
 ctest --test-dir build --output-on-failure

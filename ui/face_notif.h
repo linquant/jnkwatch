@@ -15,3 +15,6 @@ int  face_notif_unread(void);
 /* Mark all notifications as seen (called while the notifications face is on
  * screen), clearing the unread count. */
 void face_notif_mark_read(void);
+
+/* Empty the notification store (phone pushed a "clear all" over BLE). */
+void face_notif_clear(void);

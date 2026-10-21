@@ -10,6 +10,7 @@ void test_defaults(void)
     wf_settings_init(&s);
     TEST_ASSERT_EQUAL_INT(80, s.brightness);
     TEST_ASSERT_TRUE(s.wrist_wake);
+    TEST_ASSERT_EQUAL_INT(1, s.wrist_sens);   /* Moyenne */
     TEST_ASSERT_EQUAL_INT(WF_SLEEP_10S, s.sleep_ms);
 }
 
@@ -45,6 +46,18 @@ void test_wrist_wake_toggle(void)
     TEST_ASSERT_TRUE(s.wrist_wake);
 }
 
+void test_wrist_sens_clamps(void)
+{
+    wf_settings_t s;
+    wf_settings_init(&s);
+    TEST_ASSERT_EQUAL_INT(0, wf_settings_set_wrist_sens(&s, 0));
+    TEST_ASSERT_EQUAL_INT(0, s.wrist_sens);
+    TEST_ASSERT_EQUAL_INT(2, wf_settings_set_wrist_sens(&s, 2));
+    TEST_ASSERT_EQUAL_INT(2, s.wrist_sens);
+    TEST_ASSERT_EQUAL_INT(0, wf_settings_set_wrist_sens(&s, -5));  /* clamps up */
+    TEST_ASSERT_EQUAL_INT(2, wf_settings_set_wrist_sens(&s, 99));  /* clamps down */
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -52,5 +65,6 @@ int main(void)
     RUN_TEST(test_sleep_snaps_to_allowed);
     RUN_TEST(test_brightness_clamps);
     RUN_TEST(test_wrist_wake_toggle);
+    RUN_TEST(test_wrist_sens_clamps);
     return UNITY_END();
 }

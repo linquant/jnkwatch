@@ -141,6 +141,20 @@ Logic lives in `core/` with **no LVGL/SDL dependency**, so it runs as fast host 
 Full pinout, driver notes and datasheet links:
 [docs/hardware/ESP32-S3-Touch-AMOLED-1.43.md](docs/hardware/ESP32-S3-Touch-AMOLED-1.43.md).
 
+### Bill of materials
+
+The physical build targets the Waveshare board below; the rest are the battery,
+connectors, charging and fasteners used for the prototype. Amazon links are
+affiliate links (`tag=jnk00d-20`).
+
+| Part | Description | Link |
+|------|-------------|------|
+| **Main board** | Waveshare ESP32-S3 1.43″ AMOLED round display (466×466, capacitive touch, ESP32-S3R8, Wi-Fi 2.4 GHz + BLE 5.0) | [Amazon](https://www.amazon.fr/dp/B0DV3KM88S?tag=jnk00d-20) |
+| **Battery** | EEMB LiPo 3.7 V 500 mAh (562438), JST 2.0 connector | [Amazon](https://www.amazon.fr/dp/B09DPPMX14?tag=jnk00d-20) |
+| **Connectors** | RUNCCI-YUN JST 1.25 mm 2-pin male/female, 15 cm leads (100 pcs) | [Amazon](https://www.amazon.fr/dp/B09TDCLZGB?tag=jnk00d-20) |
+| **Charging cable** | Magnetic USB-C charging cable, 540° rotatable, 5 V/2 A (2-pack) | [Amazon](https://www.amazon.fr/dp/B0H6JB5NFQ?tag=jnk00d-20) |
+| **Fasteners** | M2 countersunk hex-socket screw kit, grade 10.9, nuts + washers + Allen keys (410 pcs) | [Amazon](https://www.amazon.fr/dp/B0C1BLSBLW?tag=jnk00d-20) |
+
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md).

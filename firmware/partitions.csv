@@ -1,4 +1,13 @@
-# Name,   Type, SubType, Offset,  Size, Flags
-nvs,      data, nvs,     ,        0x6000,
-phy_init, data, phy,     ,        0x1000,
-factory,  app,  factory, ,        4M,
+# Name,   Type, SubType, Offset,    Size,     Flags
+# OTA layout: otadata + two app slots. The first 0x610000 bytes are kept
+# byte-identical to the pre-OTA table so `batlog` keeps its offset and its data
+# survives the one-time USB migration flash (do NOT erase_flash). `factory` is
+# kept as a permanent recovery image: a blank otadata boots it; the first OTA
+# lands in ota_0, then updates toggle ota_0<->ota_1. See docs/ble-protocol.md.
+nvs,      data, nvs,     0x9000,    0x6000,
+phy_init, data, phy,     0xF000,    0x1000,
+factory,  app,  factory, 0x10000,   0x400000,
+batlog,   data, 0x40,    0x410000,  0x200000,
+otadata,  data, ota,     0x610000,  0x2000,
+ota_0,    app,  ota_0,   0x620000,  0x400000,
+ota_1,    app,  ota_1,   0xA20000,  0x400000,

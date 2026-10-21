@@ -1,0 +1,41 @@
+#pragma once
+#include <stdbool.h>
+
+/* Persistent watch configuration (NVS). Survives reboots so the watch keeps the
+ * last phone-pushed settings even before the companion app reconnects. */
+typedef struct {
+    int  brightness;   /* 10..100                    */
+    int  sleep_ms;     /* WF_SLEEP_5S / WF_SLEEP_10S  */
+    bool wrist_wake;
+    int  wrist_sens;   /* lift-to-wake sensitivity 0..2 */
+    bool stay_awake_charging; /* keep screen on while on USB/mains */
+    bool power_saver;  /* "watch only" ultra-low-power mode */
+    int  accent;       /* 0..ACCENT_COUNT-1           */
+} wf_stored_config_t;
+
+/* Initialise NVS (also required by NimBLE bonding) and load the saved config,
+ * falling back to the firmware defaults when nothing is stored. */
+void config_store_init(void);
+
+/* Copy out the current RAM mirror of the config. */
+void config_store_get(wf_stored_config_t *out);
+
+/* Update the settings and persist them to NVS. */
+void config_store_set_settings(int brightness, int sleep_ms, bool wrist_wake,
+                               int wrist_sens, bool stay_awake_charging,
+                               bool power_saver, int accent);
+
+/* Last battery charge measured on battery (0..100), or -1 if never saved. Kept
+ * so a watch booted on a charger (battery unmeasurable) still shows a level. */
+int  config_store_get_battery_pct(void);
+void config_store_set_battery_pct(int pct);
+
+/* Daily step total persisted across reboots. get() returns the stored count
+ * (0 if none) and writes the day-of-year it belongs to into *yday (-1 if none).
+ * set() stores both. */
+unsigned config_store_get_steps(int *yday);
+void     config_store_set_steps(unsigned steps, int yday);
+
+/* Diagnostics: store a text blob under `key` (read back over USB with the
+ * nvs_tool). */
+void config_store_set_debug_text(const char *key, const char *text);

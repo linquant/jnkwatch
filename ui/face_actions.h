@@ -8,3 +8,9 @@
 void face_actions_create(lv_obj_t *parent);
 void face_actions_tick(void);
 void face_actions_apply_accent(void);
+
+/* Apply an action-button set pushed from the phone (BLE ActionCfg): the phone
+ * clears then sets buttons in index order to resync the whole page. */
+void face_actions_apply_clear(void);
+void face_actions_apply_set(int index, unsigned id, const char *label,
+                            int icon, bool enabled);

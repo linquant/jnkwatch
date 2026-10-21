@@ -17,6 +17,7 @@ static const int CELL_DX[2] = {-96, 96};
 static const int CELL_DY[3] = {-140, 0, 140};
 
 static wf_actions_t model;
+static lv_obj_t *s_parent;
 static lv_obj_t *btn[WF_ACTIONS_PER_PAGE];
 static lv_obj_t *ico[WF_ACTIONS_PER_PAGE];
 static uint32_t  flash_until[WF_ACTIONS_PER_PAGE];
@@ -64,9 +65,11 @@ static void on_action(lv_event_t *e)
     set_flashed(i, true);          /* immediate "sent" confirmation */
 }
 
-void face_actions_create(lv_obj_t *p)
+/* (Re)build the button grid from the current model. Safe to call at runtime
+ * (e.g. after the phone pushes a new action set); runs on the LVGL thread. */
+static void rebuild(void)
 {
-    wf_actions_init(&model);
+    lv_obj_clean(s_parent);   /* drop the previous cells */
     lv_color_t a = theme_accent();
 
     int n = wf_actions_count(&model);
@@ -78,7 +81,7 @@ void face_actions_create(lv_obj_t *p)
         int col = i % 2, row = i / 2;
 
         /* Transparent cell: icon button stacked over its caption. */
-        lv_obj_t *cell = lv_obj_create(p);
+        lv_obj_t *cell = lv_obj_create(s_parent);
         lv_obj_remove_style_all(cell);
         lv_obj_set_size(cell, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
         lv_obj_set_flex_flow(cell, LV_FLEX_FLOW_COLUMN);
@@ -116,6 +119,32 @@ void face_actions_create(lv_obj_t *p)
         ico[i] = g;
         flashing[i] = false;
     }
+}
+
+void face_actions_create(lv_obj_t *p)
+{
+    s_parent = p;
+    wf_actions_init(&model);
+    rebuild();
+}
+
+void face_actions_apply_clear(void)
+{
+    wf_actions_clear(&model);
+    rebuild();
+}
+
+void face_actions_apply_set(int index, unsigned id, const char *label,
+                            int icon, bool enabled)
+{
+    int n = wf_actions_count(&model);
+    if (index == n)                          /* append (resync order) */
+        wf_actions_add(&model, id, label, (wf_icon_t)icon, enabled);
+    else if (index >= 0 && index < n)        /* overwrite in place    */
+        wf_actions_set(&model, index, id, label, (wf_icon_t)icon, enabled);
+    else
+        return;                              /* gap: ignore           */
+    rebuild();
 }
 
 void face_actions_tick(void)

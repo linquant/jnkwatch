@@ -3,14 +3,14 @@
 #include "ui.h"          /* ui_screen_on_ms(), ui_uptime_ms(), ui_screen_on_pct() */
 #include "display.h"     /* watch_battery_pct() */
 #include "screentime.h"  /* wf_screentime_format() */
-#include "face_notif.h"  /* face_notif_unread() */
+#include "version.h"     /* WF_FW_MAJOR / WF_FW_MINOR */
 #include <stdio.h>
 
 #define COL_LBL lv_color_hex(0x6B7780) /* dim caption */
 #define COL_VAL lv_color_hex(0xC7D2D8) /* bright value */
 
 static lv_obj_t *v_screen;  /* big screen-on time */
-static lv_obj_t *v_uptime, *v_ratio, *v_batt, *v_unread;
+static lv_obj_t *v_uptime, *v_ratio, *v_batt, *v_fw;
 
 static lv_obj_t *mklabel(lv_obj_t *p, const lv_font_t *f, lv_color_t c)
 {
@@ -52,7 +52,11 @@ void face_debug_create(lv_obj_t *p)
     v_uptime = mklabel(col, &lv_font_montserrat_24, COL_VAL);
     v_ratio  = mklabel(col, &lv_font_montserrat_24, COL_VAL);
     v_batt   = mklabel(col, &lv_font_montserrat_24, COL_VAL);
-    v_unread = mklabel(col, &lv_font_montserrat_24, COL_VAL);
+    v_fw     = mklabel(col, &lv_font_montserrat_24, COL_VAL);
+
+    char fw[20];
+    snprintf(fw, sizeof(fw), "Firmware v%d.%d", WF_FW_MAJOR, WF_FW_MINOR);
+    lv_label_set_text(v_fw, fw);   /* static: set once */
 
     face_debug_tick();
 }
@@ -75,9 +79,7 @@ void face_debug_tick(void)
     snprintf(line, sizeof(line), "Ratio ON  %d%%", ui_screen_on_pct());
     lv_label_set_text(v_ratio, line);
 
-    snprintf(line, sizeof(line), "Batterie  %d%%", watch_battery_pct());
+    snprintf(line, sizeof(line), "Batt %d%% %dmV%s", watch_battery_pct(),
+             watch_battery_mv(), watch_is_charging() ? " CHG" : "");
     lv_label_set_text(v_batt, line);
-
-    snprintf(line, sizeof(line), "Non lues  %d", face_notif_unread());
-    lv_label_set_text(v_unread, line);
 }

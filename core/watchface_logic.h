@@ -55,6 +55,10 @@ const char *wf_weekday_abbrev(int wday);
 /* "M-D" with no leading zeros, e.g. "9-14". mon0 is 0-based (0=Jan). */
 void wf_format_month_day(char *buf, size_t n, int mon0, int mday);
 
+/* Step count grouped by thousands with a space, e.g. 6240 -> "6 240". Writes at
+ * most n bytes incl. NUL. */
+void wf_format_steps(char *buf, size_t n, unsigned steps);
+
 /* Battery charge level bucket (drives the battery ring colour). */
 typedef enum {
     WF_BATT_OK = 0,   /* > 20%        */
@@ -63,3 +67,11 @@ typedef enum {
 } wf_batt_level_t;
 
 wf_batt_level_t wf_battery_level(int pct);
+
+/* Single-cell Li-ion state of charge from its (lightly loaded) voltage in mV:
+ * piecewise-linear over a typical LiPo discharge curve, clamped to 0..100
+ * (<= 3300 mV -> 0, >= 4200 mV -> 100). */
+int wf_battery_pct_from_mv(int mv);
+
+/* Battery icon fill, 0 (empty) .. 4 (full), for a charge in % (clamped). */
+int wf_battery_bars(int pct);
