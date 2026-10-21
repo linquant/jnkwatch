@@ -18,13 +18,13 @@ Target board: [Waveshare **ESP32-S3-Touch-AMOLED-1.43**](https://www.waveshare.c
 
 ## ⬇️ Downloads
 
-Prebuilt binaries are published on the [**Releases**](https://gitlab.com/johann.nowacki/jnkwatch/-/releases) page.
+Prebuilt binaries are published on the [**Releases**](https://github.com/linquant/jnkwatch/releases) page.
 The links below always point to the **latest** release:
 
 | What | Download | Notes |
 |------|----------|-------|
-| 📱 **Android companion** | [**jnkwatch-debug.apk**](https://gitlab.com/johann.nowacki/jnkwatch/-/releases/permalink/latest/downloads/jnkwatch-debug.apk) | Install on Android 8.0+ (allow "install from unknown sources"). |
-| ⌚ **Watch firmware** | [**jnkwatch.bin**](https://gitlab.com/johann.nowacki/jnkwatch/-/releases/permalink/latest/downloads/jnkwatch.bin) | Flashable image for the ESP32-S3-Touch-AMOLED-1.43 — see below. |
+| 📱 **Android companion** | [**jnkwatch-debug.apk**](https://github.com/linquant/jnkwatch/releases/latest/download/jnkwatch-debug.apk) | Install on Android 8.0+ (allow "install from unknown sources"). |
+| ⌚ **Watch firmware** | [**jnkwatch.bin**](https://github.com/linquant/jnkwatch/releases/latest/download/jnkwatch.bin) | Flashable image for the ESP32-S3-Touch-AMOLED-1.43 — see below. |
 
 ### Flash the watch firmware
 
@@ -106,7 +106,7 @@ lvgl/      LVGL v9 (submodule)
 
 ```sh
 sudo apt install cmake build-essential libsdl2-dev   # prerequisites
-git clone --recursive https://gitlab.com/johann.nowacki/jnkwatch.git
+git clone --recursive https://github.com/linquant/jnkwatch.git
 cd jnkwatch                      # already cloned? git submodule update --init --recursive
 ./build.sh                       # configures + builds all targets into ./build
 ./build/watch_sim                # interactive SDL2 window (mouse = touch)

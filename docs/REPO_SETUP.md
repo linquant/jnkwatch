@@ -35,14 +35,14 @@ git commit -m "Initial commit: round smartwatch LVGL UI + PC emulator"
 
 # 5) push to your remote
 git branch -M main
-git remote add origin git@gitlab.com:johann.nowacki/jnkwatch.git
+git remote add origin git@github.com:linquant/jnkwatch.git
 git push -u origin main
 ```
 
 ## Verifying a fresh clone
 
 ```sh
-git clone --recursive git@gitlab.com:johann.nowacki/jnkwatch.git
+git clone --recursive git@github.com:linquant/jnkwatch.git
 cd watch && ./build.sh && ./test.sh
 ```
 
