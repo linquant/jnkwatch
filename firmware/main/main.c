@@ -6,6 +6,8 @@
 #include "freertos/task.h"
 #include "esp_log.h"
 #include "esp_timer.h"
+#include "esp_pm.h"
+#include "sdkconfig.h"
 #include "esp_heap_caps.h"
 #include "driver/spi_master.h"
 #include "esp_lcd_panel_io.h"
@@ -21,8 +23,15 @@
 #include "touch_ft3168.h"
 #include "rtc_pcf85063.h"
 #include "imu_qmi8658.h"
+#include "config_store.h"
+#include "device_hal.h"
+#include "ble_server.h"
+#include "battery.h"
+#include "ota_update.h"
+#include "esp_ota_ops.h"
 #include "display.h"   /* WATCH_SIZE */
 #include "ui.h"
+#include "panel_ctrl.h"
 
 static const char *TAG = "jnkwatch";
 
@@ -50,7 +59,37 @@ static const sh8601_lcd_init_cmd_t co5300_init_cmds[] = {
 };
 
 static esp_lcd_panel_handle_t s_panel;
+static esp_lcd_panel_io_handle_t s_io;  /* for runtime DCS params (0x51 brightness) */
 static lv_display_t *s_disp;
+
+/* Send a DCS command at runtime. The panel IO is QSPI with 32-bit commands, so
+ * (like esp_lcd_sh8601's own tx_param) the DCS byte must be wrapped as
+ * 0x02 | 0x00 | cmd | 0x00 — a bare 0x51 would go out as 0x00000051 and be
+ * ignored by the controller. */
+static void panel_dcs(uint8_t cmd, const void *param, size_t len)
+{
+    if (s_io) esp_lcd_panel_io_tx_param(s_io, (0x02 << 24) | (cmd << 8), param, len);
+}
+
+/* Panel control exposed to the HAL (panel_ctrl.h) for screen-sleep + brightness. */
+void board_panel_on(bool on)
+{
+    if (on) {
+        panel_dcs(0x11, NULL, 0);          /* SLPOUT */
+        vTaskDelay(pdMS_TO_TICKS(120));    /* same as init */
+        panel_dcs(0x29, NULL, 0);          /* DISPON */
+    } else {
+        panel_dcs(0x28, NULL, 0);          /* DISPOFF */
+        vTaskDelay(pdMS_TO_TICKS(40));     /* >= 2 frames */
+        panel_dcs(0x10, NULL, 0);          /* SLPIN */
+    }
+}
+
+void board_panel_brightness(uint8_t value)
+{
+    /* DCS 0x51 WRDISBV — one parameter byte. */
+    panel_dcs(0x51, (uint8_t[]){ value }, 1);
+}
 
 /* esp_lcd calls this when a colour transfer to the panel finishes. */
 static bool on_color_done(esp_lcd_panel_io_handle_t io,
@@ -128,6 +167,9 @@ static void clock_init(void)
 
     struct tm rt;
     bool valid = rtc_pcf85063_get(&rt);
+#if defined(WATCH_SET_RTC_EPOCH) && defined(WATCH_FORCE_RTC)
+    valid = false;   /* one-shot: force a reseed from the build epoch over USB */
+#endif
     if (!valid) {
         /* Fresh chip or power was lost: seed from the build epoch so the watch
          * still shows a sane recent time until it is set properly. */
@@ -154,19 +196,54 @@ static void clock_init(void)
 
 static uint32_t tick_ms(void) { return (uint32_t)(esp_timer_get_time() / 1000); }
 
+/* Automatic light sleep: the CPU drops to a low frequency (and, with tickless
+ * idle, into light sleep) between activity, cutting SoC draw while the screen is
+ * off — the BLE link is kept alive by the controller's own modem sleep. This is
+ * a no-op unless CONFIG_PM_ENABLE is set (see sdkconfig.defaults); on-device BLE
+ * stability must be validated before enabling it by default. */
+static void power_mgmt_init(void)
+{
+#if CONFIG_PM_ENABLE
+    esp_pm_config_t pm = {
+        .max_freq_mhz = 240,
+        .min_freq_mhz = 40,
+        .light_sleep_enable = true,
+    };
+    esp_err_t err = esp_pm_configure(&pm);
+    ESP_LOGI(TAG, "esp_pm auto light-sleep: %s", esp_err_to_name(err));
+#else
+    ESP_LOGI(TAG, "esp_pm disabled (screen-off + loop throttle only)");
+#endif
+}
+
 static void lvgl_task(void *arg)
 {
     (void)arg;
     for (;;) {
-        lv_timer_handler();
+        /* lv_timer_handler() returns how long until LVGL's next due timer
+         * (refresh / input read / animation, all at LV_DEF_REFR_PERIOD = 33 ms),
+         * so sleeping exactly that long loses nothing on screen — whereas the old
+         * fixed 5 ms loop spun ~200x/s (IMU I2C read + face ticks each pass)
+         * for a 30 fps display. */
+        uint32_t next_ms = lv_timer_handler();
         ui_tick();
-        vTaskDelay(pdMS_TO_TICKS(5));
+        /* Screen off after inactivity: slow the loop to ~8 Hz so the CPU idles
+         * far more (the panel is already off). Touch is still polled fast enough
+         * to catch a wake tap. */
+        uint32_t delay_ms = ui_is_asleep() ? 120
+                          : next_ms < 5 ? 5 : next_ms > 33 ? 33 : next_ms;
+        vTaskDelay(pdMS_TO_TICKS(delay_ms));
     }
 }
 
 void app_main(void)
 {
     ESP_LOGI(TAG, "boot");
+
+    /* NVS + inbound-config queue first (NVS is also needed by BLE bonding). */
+    device_hal_init();
+    config_store_init();
+    ota_update_init();   /* OTA flash task + queue (fed by the BLE OTA chars) */
 
     /* Touch first, like the Waveshare demo: the FT3168 reset is tied to the
      * OLED_RESET line (GPIO21), so bringing touch up BEFORE the LCD lets the
@@ -198,6 +275,7 @@ void app_main(void)
     };
     ESP_ERROR_CHECK(esp_lcd_new_panel_io_spi(
         (esp_lcd_spi_bus_handle_t)BSP_LCD_SPI_HOST, &io_cfg, &io));
+    s_io = io;  /* keep for runtime DCS params (brightness) */
 
     const esp_lcd_panel_dev_config_t panel_cfg = {
         .reset_gpio_num = BSP_LCD_RST,
@@ -215,6 +293,23 @@ void app_main(void)
     lv_init();
     lv_tick_set_cb(tick_ms);
 
+    /* Extend LVGL's heap with a big PSRAM pool. The builtin pool is only 64 KB of
+     * internal RAM — objects AND render layer buffers come from it, so a busy
+     * face or a face-to-face transition could fail to allocate a layer buffer and
+     * crash the renderer (lv_memset on NULL). Adding PSRAM here (instead of
+     * enlarging the internal pool, which starves BLE) lets those allocations
+     * overflow to PSRAM. */
+    {
+        const size_t LV_PSRAM_POOL = 1024 * 1024;
+        void *pool = heap_caps_malloc(LV_PSRAM_POOL, MALLOC_CAP_SPIRAM);
+        if (pool) {
+            lv_mem_add_pool(pool, LV_PSRAM_POOL);
+            ESP_LOGI(TAG, "LVGL: added %u KB PSRAM pool", (unsigned)(LV_PSRAM_POOL / 1024));
+        } else {
+            ESP_LOGW(TAG, "LVGL: PSRAM pool alloc failed");
+        }
+    }
+
     s_disp = lv_display_create(LCD_H, LCD_V);
     lv_display_set_flush_cb(s_disp, flush_cb);
     lv_display_add_event_cb(s_disp, even_rounder, LV_EVENT_INVALIDATE_AREA, NULL);
@@ -229,6 +324,11 @@ void app_main(void)
     /* Timezone + clock from the RTC (I2C bus already up from touch init). */
     clock_init();
 
+    /* Battery ADC + external-power detection + minute log. After clock_init so
+     * the log's boot entry carries the RTC time; before ui_init so the first
+     * frame shows a real level. */
+    battery_init();
+
     /* IMU (accelerometer) for lift-to-wake + the aura activity level. */
     imu_qmi8658_init();
 
@@ -240,6 +340,42 @@ void app_main(void)
     lv_indev_set_display(touch, s_disp);
 
     ui_init();
+
+    /* Apply the persisted config on first UI tick (enqueue before the task runs). */
+    {
+        wf_stored_config_t c;
+        config_store_get(&c);
+        wf_config_msg_t m = {
+            .kind = WF_CFG_SETTINGS, .brightness = c.brightness,
+            .sleep_ms = c.sleep_ms, .wrist_wake = c.wrist_wake,
+            .wrist_sens = c.wrist_sens,
+            .stay_awake_charging = c.stay_awake_charging,
+            .power_saver = c.power_saver, .accent = c.accent,
+        };
+        device_config_enqueue(&m);
+    }
+
     xTaskCreate(lvgl_task, "lvgl", 8 * 1024, NULL, 3, NULL);
-    ESP_LOGI(TAG, "UI up (%dx%d), touch ready", LCD_H, LCD_V);
+
+    /* Companion-app BLE GATT server (advertises as JNKWatch). */
+    ble_server_start();
+
+    /* Power management (auto light-sleep). No-op unless CONFIG_PM_ENABLE. */
+    power_mgmt_init();
+
+    ESP_LOGI(TAG, "UI up (%dx%d), touch ready, BLE up", LCD_H, LCD_V);
+
+    /* OTA rollback confirm: if we just booted a freshly-flashed image (state
+     * PENDING_VERIFY), reaching here means display + LVGL + BLE all came up, so
+     * mark it valid and cancel the pending rollback. A boot that crashes before
+     * this is rolled back to the previous slot by the bootloader. */
+    {
+        const esp_partition_t *run = esp_ota_get_running_partition();
+        esp_ota_img_states_t st;
+        if (run && esp_ota_get_state_partition(run, &st) == ESP_OK &&
+            st == ESP_OTA_IMG_PENDING_VERIFY) {
+            esp_ota_mark_app_valid_cancel_rollback();
+            ESP_LOGI(TAG, "OTA image confirmed valid (%s)", run->label);
+        }
+    }
 }

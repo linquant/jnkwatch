@@ -23,10 +23,13 @@ set(SHARED_SRC
   ui/face_clock.c
   ui/face_notif.c
   ui/face_actions.c
-  ui/face_timer.c
   ui/face_settings.c
   ui/face_debug.c
   ui/face_aura.c
+  ui/face_apps.c
+  ui/face_level.c
+  ui/face_steps.c
+  ui/face_probes.c
   core/watchface_logic.c
   core/dotfont.c
   core/timer.c
@@ -36,7 +39,14 @@ set(SHARED_SRC
   core/notify.c
   core/actions.c
   core/pixelstats.c
-  core/screentime.c)
+  core/screentime.c
+  core/weather.c
+  core/level.c
+  core/pedometer.c
+  core/steps.c
+  core/probes.c
+  core/sha256.c
+  core/ota_proto.c)
 set(SHARED_INC
   ${CMAKE_CURRENT_SOURCE_DIR}/platform
   ${CMAKE_CURRENT_SOURCE_DIR}/ui
@@ -65,6 +75,29 @@ target_include_directories(test_watchface_logic PRIVATE
 target_compile_definitions(test_watchface_logic PRIVATE UNITY_INCLUDE_DOUBLE)
 target_link_libraries(test_watchface_logic m)
 add_test(NAME watchface_logic COMMAND test_watchface_logic)
+
+add_executable(test_pedometer
+  tests/test_pedometer.c
+  core/pedometer.c
+  third_party/unity/src/unity.c)
+target_include_directories(test_pedometer PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/core
+  ${CMAKE_CURRENT_SOURCE_DIR}/third_party/unity/src)
+target_compile_definitions(test_pedometer PRIVATE UNITY_INCLUDE_DOUBLE)
+target_link_libraries(test_pedometer m)
+add_test(NAME pedometer COMMAND test_pedometer)
+
+add_executable(test_steps
+  tests/test_steps.c
+  core/steps.c
+  core/pedometer.c
+  third_party/unity/src/unity.c)
+target_include_directories(test_steps PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/core
+  ${CMAKE_CURRENT_SOURCE_DIR}/third_party/unity/src)
+target_compile_definitions(test_steps PRIVATE UNITY_INCLUDE_DOUBLE)
+target_link_libraries(test_steps m)
+add_test(NAME steps COMMAND test_steps)
 
 add_executable(test_dotfont
   tests/test_dotfont.c
@@ -105,6 +138,17 @@ target_compile_definitions(test_wrist PRIVATE UNITY_INCLUDE_DOUBLE)
 target_link_libraries(test_wrist m)
 add_test(NAME wrist COMMAND test_wrist)
 
+add_executable(test_level
+  tests/test_level.c
+  core/level.c
+  third_party/unity/src/unity.c)
+target_include_directories(test_level PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/core
+  ${CMAKE_CURRENT_SOURCE_DIR}/third_party/unity/src)
+target_compile_definitions(test_level PRIVATE UNITY_INCLUDE_DOUBLE)
+target_link_libraries(test_level m)
+add_test(NAME level COMMAND test_level)
+
 add_executable(test_activity
   tests/test_activity.c
   core/activity.c
@@ -124,6 +168,24 @@ target_include_directories(test_notify PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/core
   ${CMAKE_CURRENT_SOURCE_DIR}/third_party/unity/src)
 add_test(NAME notify COMMAND test_notify)
+
+add_executable(test_weather
+  tests/test_weather.c
+  core/weather.c
+  third_party/unity/src/unity.c)
+target_include_directories(test_weather PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/core
+  ${CMAKE_CURRENT_SOURCE_DIR}/third_party/unity/src)
+add_test(NAME weather COMMAND test_weather)
+
+add_executable(test_probes
+  tests/test_probes.c
+  core/probes.c
+  third_party/unity/src/unity.c)
+target_include_directories(test_probes PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/core
+  ${CMAKE_CURRENT_SOURCE_DIR}/third_party/unity/src)
+add_test(NAME probes COMMAND test_probes)
 
 add_executable(test_actions
   tests/test_actions.c
@@ -152,6 +214,16 @@ target_include_directories(test_screentime PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/core
   ${CMAKE_CURRENT_SOURCE_DIR}/third_party/unity/src)
 add_test(NAME screentime COMMAND test_screentime)
+
+add_executable(test_ota_proto
+  tests/test_ota_proto.c
+  core/ota_proto.c
+  core/sha256.c
+  third_party/unity/src/unity.c)
+target_include_directories(test_ota_proto PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/core
+  ${CMAKE_CURRENT_SOURCE_DIR}/third_party/unity/src)
+add_test(NAME ota_proto COMMAND test_ota_proto)
 
 # AMOLED lit-pixel budget guard (renders each face; fails if over budget).
 add_test(NAME amoled_budget COMMAND watch_pixels --check)

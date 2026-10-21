@@ -5,9 +5,14 @@ CONFIG_IDF_TARGET="esp32s3"
 CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y
 CONFIG_ESPTOOLPY_FLASHMODE_QIO=y
 
-# Custom partition table
+# Custom partition table (OTA layout: otadata + ota_0 + ota_1, see partitions.csv)
 CONFIG_PARTITION_TABLE_CUSTOM=y
 CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
+
+# OTA rollback: a freshly-OTA'd image boots in PENDING_VERIFY and must call
+# esp_ota_mark_app_valid_cancel_rollback() once healthy (main.c, end of app_main).
+# A boot-loop that never confirms is rolled back to the previous slot automatically.
+CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y
 
 # 8 MB Octal PSRAM @80MHz (needed for the framebuffers)
 CONFIG_SPIRAM=y
@@ -34,5 +39,54 @@ CONFIG_LV_FONT_MONTSERRAT_34=y
 CONFIG_LV_FONT_MONTSERRAT_40=y
 CONFIG_LV_FONT_MONTSERRAT_48=y
 CONFIG_LV_FONT_DEFAULT_MONTSERRAT_28=y
-# LVGL uses the ESP heap (PSRAM-capable)
+# LVGL keeps its default 64 KB builtin pool in internal RAM; main.c adds a large
+# PSRAM pool at boot (lv_mem_add_pool) so render layer buffers can't exhaust it.
 CONFIG_LV_USE_STDLIB_MALLOC_BUILTIN=y
+
+# Bluetooth Low Energy — NimBLE host (companion-app GATT server)
+CONFIG_BT_ENABLED=y
+CONFIG_BT_NIMBLE_ENABLED=y
+CONFIG_BT_NIMBLE_ROLE_PERIPHERAL=y
+CONFIG_BT_NIMBLE_ROLE_BROADCASTER=y
+# We are peripheral-only: no central/observer roles
+# CONFIG_BT_NIMBLE_ROLE_CENTRAL is not set
+# CONFIG_BT_NIMBLE_ROLE_OBSERVER is not set
+# Bonding + persistent keys in NVS (encrypted config link)
+CONFIG_BT_NIMBLE_NVS_PERSIST=y
+
+# WiFi is unused by this app — free the RAM/flash and avoid BLE/WiFi coexistence
+# CONFIG_ESP_WIFI_ENABLED is not set
+
+# --- Power management (auto light-sleep, BLE stays connected) ----------------
+# The screen-off saver (AMOLED off + loop throttle) is always on. Automatic
+# light-sleep is the deepest mode that KEEPS the BLE link alive (so notifications
+# still arrive) — the config below mirrors IDF's reference example
+# examples/bluetooth/nimble/power_save (sdkconfig.defaults.esp32s3, 32 kHz-XTAL
+# variant; this board has the 32.768 kHz crystal on XTAL_32K_P/N). It must still
+# be validated on-device: after enabling, confirm a phone notification displays
+# WITHOUT a reconnect, and that the QSPI/PSRAM display stays stable. If anything
+# misbehaves, set these back off — power_mgmt_init() is a no-op without PM_ENABLE.
+CONFIG_PM_ENABLE=y
+CONFIG_FREERTOS_USE_TICKLESS_IDLE=y
+CONFIG_FREERTOS_IDLE_TIME_BEFORE_SLEEP=3
+# No auto light-sleep while a USB HOST is connected: light-sleep powers down the
+# USB-Serial/JTAG, so esptool (flash, tools/batlog.sh) and the monitor would
+# fail intermittently ("No serial data received"). A wall charger sends no USB
+# SOF, so the watch still light-sleeps on it.
+CONFIG_USJ_NO_AUTO_LS_ON_CONNECTION=y
+# Light-sleep enter/exit callbacks: battery.c accounts the time actually spent
+# in light-sleep into the battery log (diagnoses what keeps the SoC awake).
+CONFIG_PM_LIGHT_SLEEP_CALLBACKS=y
+# TEMP diagnostic: per-lock held time, logged by battery.c (see pm_top_locks).
+CONFIG_PM_PROFILING=y
+# BLE controller modem sleep (mode 1). First-validation variant: low-power clock
+# = MAIN XTAL kept powered during light sleep — no dependency on the 32 kHz
+# crystal (robust on any board). Once the 32.768 kHz crystal is confirmed on
+# XTAL_32K_P/N, switch to the more efficient variant:
+#   CONFIG_BT_CTRL_LPCLK_SEL_EXT_32K_XTAL=y + CONFIG_RTC_CLK_SRC_EXT_CRYS=y
+# (and drop MAIN_XTAL_PU_DURING_LIGHT_SLEEP).
+CONFIG_BT_CTRL_MODEM_SLEEP=y
+CONFIG_BT_CTRL_MODEM_SLEEP_MODE_1=y
+CONFIG_BT_CTRL_LPCLK_SEL_MAIN_XTAL=y
+CONFIG_BT_CTRL_MAIN_XTAL_PU_DURING_LIGHT_SLEEP=y
+CONFIG_ESP_PHY_MAC_BB_PD=y

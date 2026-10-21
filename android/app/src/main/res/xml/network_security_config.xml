@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Probes (GET) and action webhooks (POST) target endpoints the user types in,
+  which are often local devices / home-automation services reachable only over
+  plain HTTP. Permit cleartext traffic so http:// URLs work; https:// URLs keep
+  using the system trust store as before.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>

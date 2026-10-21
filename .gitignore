@@ -24,3 +24,26 @@ compile_commands.json
 /firmware/sdkconfig
 /firmware/sdkconfig.old
 /firmware/dependencies.lock
+
+# Built APKs (binaries, not versioned)
+*.apk
+
+# Android (Gradle/Studio) build artifacts
+/android/.gradle/
+/android/build/
+/android/app/build/
+/android/local.properties
+/android/.idea/
+/android/*.iml
+/android/app/*.iml
+/android/captures/
+
+# Battery logs pulled off the watch (tools/batlog.sh)
+/logs/
+
+# Local Claude Code MCP config (environment-specific, not shared)
+/.mcp.json
+
+# Python bytecode cache (tools/)
+__pycache__/
+*.pyc

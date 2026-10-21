@@ -19,12 +19,33 @@ const uint16_t *watch_framebuffer(void);
 /* Monotonic milliseconds, used as the LVGL tick source. */
 uint32_t watch_millis(void);
 
-/* Battery charge, 0..100%. Mocked on PC; reads the ADC on real hardware. */
+/* Battery charge, 0..100%, or -1 if unknown. Mocked on PC ($WATCH_BATT);
+ * reads the ADC on real hardware. While charging the device cannot measure the
+ * cell, so this is the last level seen on battery. */
 int watch_battery_pct(void);
 
+/* Battery (VCC) voltage in mV, for diagnostics. PC mock: fixed. */
+int watch_battery_mv(void);
+
+/* True while the watch is on external power (charging). On device: VCC is
+ * above a Li-ion's max, i.e. USB_5V is present (any charger, wall bricks too).
+ * Used for the charging icon and to keep the screen awake while plugged in.
+ * PC: $WATCH_CHARGING. */
+bool watch_is_charging(void);
+
 /* Set display backlight, 10..100%. No-op on PC (the sim dims via an overlay);
- * on hardware, drive the backlight GPIO with LEDC PWM. */
+ * on hardware, set the AMOLED brightness via DCS 0x51 (WRDISBV). */
 void watch_set_backlight(int pct);
+
+/* Enter/leave display sleep. No-op on PC (the sim uses a black overlay); on
+ * hardware, turn the AMOLED panel OFF (DCS 0x28) when sleeping and back ON
+ * (0x29) + restore brightness when waking. This is the dominant battery saver
+ * (the panel is the biggest consumer).
+ * In the normal veille the CPU keeps running (light-sleep) so touch/wrist still
+ * wake the watch and BLE stays connected. In the "watch only" power-saver mode
+ * (config: power_saver) sleeping also arms wake-on-motion (IMU) and deep-sleeps
+ * the SoC with BLE dropped; a wrist raise then reboots straight to the clock. */
+void watch_display_sleep(bool sleeping);
 
 /* Enable/disable lift-to-wake. No-op on PC; on hardware, arm the QMI8658
  * wake-on-motion / tilt detection and gate the display power. */
@@ -33,6 +54,13 @@ void watch_set_wrist_wake(bool on);
 /* Read the accelerometer in g. Mocked on PC (simulates a periodic wrist
  * raise); on hardware, read the QMI8658. */
 void watch_read_accel(double *ax, double *ay, double *az);
+
+/* Persisted daily step total across reboots. load() returns the stored total
+ * and writes the day-of-year (tm_yday) it belongs to into *yday (-1 if none
+ * stored). save() stores both. On PC there is no persistence: load() returns 0
+ * with *yday=-1 and save() is a no-op. On hardware these go through NVS. */
+uint32_t watch_steps_load(int *yday);
+void     watch_steps_save(uint32_t steps, int yday);
 
 /* Simulated phone notification source (BLE stand-in). Returns 1 and fills
  * *out when a new notification has arrived since the last poll, else 0. On PC
@@ -44,6 +72,56 @@ int watch_poll_notification(wf_notif_t *out);
  * button as feedback); on hardware, send action_id to the phone over BLE
  * (a GATT characteristic the companion app subscribes to). */
 void watch_send_action(unsigned action_id);
+
+/* --- Inbound configuration from the phone (BLE) ------------------------------
+ * The companion app writes settings / action-button config over GATT (see
+ * docs/ble-protocol.md). The BLE task queues those as wf_config_msg_t; the UI
+ * drains them each tick (ui_tick) and applies them to the running faces — this
+ * indirection keeps the write-side off the LVGL thread. On PC there is no phone,
+ * so watch_poll_config() returns 0 (mock feed possible for tests). */
+typedef enum {
+    WF_CFG_SETTINGS = 1,   /* brightness / sleep_ms / wrist_wake / accent */
+    WF_CFG_ACTION_CLEAR,   /* wipe the action-button set                  */
+    WF_CFG_ACTION_SET,     /* set one action button (index/id/icon/...)   */
+    WF_CFG_NOTIF_CLEAR,    /* clear the notification store                */
+    WF_CFG_WEATHER,        /* current weather from the phone              */
+    WF_CFG_PROBE,          /* one server-probe value for the Sondes face  */
+} wf_config_kind_t;
+
+typedef struct {
+    wf_config_kind_t kind;
+    /* WF_CFG_SETTINGS */
+    int  brightness;       /* 10..100                     */
+    int  sleep_ms;         /* WF_SLEEP_5S / WF_SLEEP_10S   */
+    bool wrist_wake;
+    int  wrist_sens;       /* lift-to-wake sensitivity 0..2 */
+    bool stay_awake_charging; /* keep screen on while on USB/mains */
+    bool power_saver;      /* "watch only" ultra-low-power mode */
+    int  accent;           /* 0..ACCENT_COUNT-1           */
+    /* WF_CFG_ACTION_SET */
+    int      index;        /* 0..WF_ACTION_MAX-1          */
+    unsigned action_id;
+    int      icon;         /* 0..WF_ICON_COUNT-1          */
+    bool     enabled;
+    char     label[16];
+    /* WF_CFG_WEATHER */
+    int      temp_c;       /* whole degrees Celsius       */
+    int      cond;         /* wf_wx_cond_t (0..6)         */
+    char     location[24];
+    /* WF_CFG_PROBE */
+    int      probe_slot;   /* 0..WF_PROBE_MAX-1           */
+    char     probe_name[24];
+    char     probe_value[48];
+} wf_config_msg_t;
+
+/* Dequeue one pending config message. Returns 1 and fills *out, else 0. */
+int watch_poll_config(wf_config_msg_t *out);
+
+/* Report a settings change the USER made on the watch, so the phone can be
+ * notified (BLE Settings notify) and the value persisted. No-op on PC. */
+void watch_settings_changed(int brightness, int sleep_ms, bool wrist_wake,
+                            int wrist_sens, bool stay_awake_charging,
+                            bool power_saver, int accent);
 
 /* Current wall-clock time as an epoch. On PC it is the host clock, but can be
  * pinned via the $WATCH_EPOCH env var (seconds) for deterministic screenshots.

@@ -176,6 +176,90 @@ void test_reltime_bucket_edges(void)
     wf_notif_reltime(b, sizeof(b), now, now - 86400);   TEST_ASSERT_EQUAL_STRING("1j", b);
 }
 
+/* --- issue #20: emoji / formatting sanitising ------------------------------ */
+
+/* Push a body and read back the stored (sanitised) text. */
+static const char *pushed_body(wf_notif_store_t *s, const char *body)
+{
+    wf_notif_push(s, "App", "T", body, 0);
+    return wf_notif_get(s, 0)->body;
+}
+
+void test_emoji_stripped_keeps_text(void)
+{
+    wf_notif_store_t s; wf_notif_init(&s);
+    /* 😀 = F0 9F 98 80, 🎉 = F0 9F 8E 89 */
+    TEST_ASSERT_EQUAL_STRING("Hello World",
+        pushed_body(&s, "Hello \xF0\x9F\x98\x80 World"));
+    TEST_ASSERT_EQUAL_STRING("Bravo !",
+        pushed_body(&s, "Bravo\xF0\x9F\x8E\x89 !"));
+}
+
+void test_emoji_only_becomes_empty(void)
+{
+    wf_notif_store_t s; wf_notif_init(&s);
+    TEST_ASSERT_EQUAL_STRING("", pushed_body(&s, "\xF0\x9F\x98\x80\xF0\x9F\x8E\x89"));
+}
+
+void test_accents_transliterated_to_ascii(void)
+{
+    wf_notif_store_t s; wf_notif_init(&s);
+    /* The watch font has no accented glyphs, so accents fold to ASCII.
+     * "été à" (é=C3A9, à=C3A0) -> "ete a". */
+    TEST_ASSERT_EQUAL_STRING("ete a", pushed_body(&s, "\xC3\xA9t\xC3\xA9 \xC3\xA0"));
+    /* ç=C3A7, ô=C3B4, œ=C593, €=E282AC, « »=C2AB/C2BB */
+    TEST_ASSERT_EQUAL_STRING("c'est 5 EUR, controle",
+        pushed_body(&s, "c'est 5 \xE2\x82\xAC, contr\xC3\xB4le"));
+    TEST_ASSERT_EQUAL_STRING("coeur", pushed_body(&s, "c\xC5\x93ur"));
+    TEST_ASSERT_EQUAL_STRING("\"cite\"", pushed_body(&s, "\xC2\xAB" "cit\xC3\xA9\xC2\xBB"));
+}
+
+void test_typographic_punctuation_folded(void)
+{
+    wf_notif_store_t s; wf_notif_init(&s);
+    /* ‘ ’ “ ” – … (E2 80 98 / 99 / 9C / 9D / 93 / A6) */
+    TEST_ASSERT_EQUAL_STRING("'hi' \"yo\" - ...",
+        pushed_body(&s, "\xE2\x80\x98hi\xE2\x80\x99 \xE2\x80\x9Cyo\xE2\x80\x9D "
+                        "\xE2\x80\x93 \xE2\x80\xA6"));
+}
+
+void test_newlines_collapse_to_space(void)
+{
+    wf_notif_store_t s; wf_notif_init(&s);
+    TEST_ASSERT_EQUAL_STRING("line1 line2", pushed_body(&s, "line1\n\nline2"));
+    TEST_ASSERT_EQUAL_STRING("a b", pushed_body(&s, "  a \t b  "));
+}
+
+void test_output_is_pure_ascii_and_bounded(void)
+{
+    wf_notif_store_t s; wf_notif_init(&s);
+    char big[400]; int w = 0;
+    for (int i = 0; i < 150; i++) { big[w++] = (char)0xC3; big[w++] = (char)0xA9; } /* 150×"é" */
+    big[w] = '\0';
+    const char *out = pushed_body(&s, big);   /* -> all 'e', truncated */
+    size_t len = strlen(out);
+    TEST_ASSERT_EQUAL_INT(WF_NOTIF_BODY_LEN - 1, (int)len);
+    for (size_t i = 0; i < len; i++) {
+        TEST_ASSERT_TRUE((unsigned char)out[i] < 0x80);   /* pure ASCII, no tofu bytes */
+        TEST_ASSERT_EQUAL_UINT8('e', (unsigned char)out[i]);
+    }
+}
+
+void test_multichar_translit_not_split_at_boundary(void)
+{
+    wf_notif_store_t s; wf_notif_init(&s);
+    /* Fill so only 1 free byte remains, then an "œ" (-> "oe", 2 bytes): it must
+     * be dropped whole, not written as a lone 'o'. */
+    char big[WF_NOTIF_BODY_LEN + 8]; int w = 0;
+    for (int i = 0; i < WF_NOTIF_BODY_LEN - 2; i++) big[w++] = 'a'; /* fills to cap-1 minus 1 */
+    big[w++] = (char)0xC5; big[w++] = (char)0x93;   /* œ */
+    big[w] = '\0';
+    const char *out = pushed_body(&s, big);
+    size_t len = strlen(out);
+    TEST_ASSERT_EQUAL_INT(WF_NOTIF_BODY_LEN - 2, (int)len);  /* only the 'a' run */
+    TEST_ASSERT_EQUAL_UINT8('a', (unsigned char)out[len - 1]); /* no stray 'o' */
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -192,5 +276,12 @@ int main(void)
     RUN_TEST(test_clear);
     RUN_TEST(test_reltime_buckets);
     RUN_TEST(test_reltime_bucket_edges);
+    RUN_TEST(test_emoji_stripped_keeps_text);
+    RUN_TEST(test_emoji_only_becomes_empty);
+    RUN_TEST(test_accents_transliterated_to_ascii);
+    RUN_TEST(test_typographic_punctuation_folded);
+    RUN_TEST(test_newlines_collapse_to_space);
+    RUN_TEST(test_output_is_pure_ascii_and_bounded);
+    RUN_TEST(test_multichar_translit_not_split_at_boundary);
     return UNITY_END();
 }

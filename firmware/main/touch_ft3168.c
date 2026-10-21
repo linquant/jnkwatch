@@ -7,6 +7,7 @@
 #include "display.h"   /* WATCH_SIZE */
 #include "driver/i2c.h"
 #include "freertos/FreeRTOS.h"
+#include "esp_log.h"
 
 #define TOUCH_I2C_PORT I2C_NUM_0
 #define TOUCH_TIMEOUT  pdMS_TO_TICKS(100)
@@ -52,4 +53,21 @@ bool touch_ft3168_read(uint16_t *x, uint16_t *y)
     *x = px;
     *y = py;
     return true;
+}
+
+/* FocalTech power-mode register: 0x00 active, 0x01 monitor, 0x03 hibernate
+ * (hibernate stops scanning — no touch wake, so never used here). */
+#define REG_PMODE     0xA5
+#define PMODE_ACTIVE  0x00
+#define PMODE_MONITOR 0x01
+
+void touch_ft3168_set_monitor(bool monitor)
+{
+    uint8_t cmd[2] = { REG_PMODE, monitor ? PMODE_MONITOR : PMODE_ACTIVE };
+    esp_err_t err = i2c_master_write_to_device(TOUCH_I2C_PORT, BSP_I2C_ADDR_TOUCH,
+                                               cmd, sizeof(cmd), TOUCH_TIMEOUT);
+    uint8_t back = 0xFF;
+    rd(REG_PMODE, &back, 1);   /* may NACK once in monitor — diagnostic only */
+    ESP_LOGI("touch", "power mode -> %s (write %s, readback 0x%02x)",
+             monitor ? "MONITOR" : "ACTIVE", esp_err_to_name(err), back);
 }
