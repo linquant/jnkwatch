@@ -18,10 +18,10 @@ If you cloned without `--recursive`:
 git submodule update --init --recursive
 ```
 
-## Golden rule: test-driven, logic in `core/`
+## Golden rule: test-driven, logic in `firmware-esp32/core/`
 
-- Put **pure logic** (no LVGL, no platform calls) in `core/` and unit-test it in `tests/`.
-- `ui/` should only turn `core/` results into widgets.
+- Put **pure logic** (no LVGL, no platform calls) in `firmware-esp32/core/` and unit-test it in `firmware-esp32/tests/`.
+- `firmware-esp32/ui/` should only turn `core/` results into widgets.
 - `platform/` is the hardware abstraction layer (HAL); keep device specifics behind it.
 
 Workflow: **write a failing test first**, make it pass, then wire the UI and confirm with

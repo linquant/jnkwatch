@@ -4,12 +4,12 @@
 
 ## Contexte
 L'OTA par BLE (mise à jour firmware sans fil, caractéristiques OtaCtrl `6a4e010A`
-+ OtaData `6a4e010B`, voir `docs/ble-protocol.md` et `firmware/main/ota_update.c`)
++ OtaData `6a4e010B`, voir `docs/ble-protocol.md` et `firmware-esp32/firmware/main/ota_update.c`)
 a été livrée en **v1 non authentifiée**, de façon cohérente avec le lien BLE
 actuellement **non chiffré** (voir [[reenable-ble-encryption]]).
 
 État actuel : la montre vérifie l'**intégrité** de l'image (SHA-256 annoncé au
-START + comparé en flux dans `core/ota_proto.c`, puis validation d'en-tête par
+START + comparé en flux dans `firmware-esp32/core/ota_proto.c`, puis validation d'en-tête par
 `esp_ota_end`), mais **pas son authenticité**. N'importe quel central BLE à
 portée peut donc pousser un firmware arbitraire et le faire démarrer. C'est
 strictement plus grave que l'exposition de configuration déjà notée dans le

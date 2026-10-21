@@ -10,7 +10,7 @@ reconnexion, l'un des deux ne conservait pas la clé → nouvelle demande
 d'appairage sans fin.
 
 État actuel : toutes les caractéristiques sont en **clair** (aucun flag
-`BLE_GATT_CHR_F_*_ENC` dans `firmware/main/ble_server.c`). N'importe quel central
+`BLE_GATT_CHR_F_*_ENC` dans `firmware-esp32/firmware/main/ble_server.c`). N'importe quel central
 BLE à portée peut lire/écrire les réglages, l'heure, pousser des notifs et
 reconfigurer les boutons. Risque faible pour une montre perso, mais réel.
 
@@ -35,7 +35,7 @@ Rétablir une liaison **chiffrée et bondée** qui **persiste** correctement,
   montre → **aucune** nouvelle demande d'appairage.
 
 ## Fichiers
-- `firmware/main/ble_server.c` (flags des caractéristiques + config `ble_hs_cfg.sm_*`)
+- `firmware-esp32/firmware/main/ble_server.c` (flags des caractéristiques + config `ble_hs_cfg.sm_*`)
 - `firmware/sdkconfig.defaults` (`CONFIG_BT_NIMBLE_NVS_PERSIST`)
 - `docs/ble-protocol.md` (section Security)
 - App : `android/app/src/main/java/fr/ponera/jnkwatch/ble/WatchBleClient.kt`

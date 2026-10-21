@@ -87,17 +87,19 @@ built around a documented GATT contract — see [docs/ble-protocol.md](docs/ble-
 The UI is plain **LVGL v9** split from a thin hardware layer, so one codebase targets three outputs:
 
 ```
-core/      pure LOGIC — unit-tested, NO LVGL/platform dependency
-ui/        LVGL faces (turn core/ results into widgets) — shared by every target
-platform/  display + tick + HAL (PC framebuffer AND ESP32-S3)
-firmware/  ESP-IDF app (device drivers: SH8601 panel, FT3168 touch, QMI8658 IMU,
-           PCF85063 RTC, battery/ADC, NimBLE GATT server, NVS config store)
-shot/      headless target: renders one frame to a PNG (for CI / review)
-sim/       interactive target: SDL2 window with mouse-as-touch
-android/   Kotlin/Jetpack Compose companion app
-tests/     Unity unit tests for core/
-third_party/ stb_image_write.h (PNG) + Unity (submodule)
-lvgl/      LVGL v9 (submodule)
+firmware-esp32/         watch side: LVGL UI + ESP-IDF firmware + PC emulator
+  core/                 pure LOGIC — unit-tested, NO LVGL/platform dependency
+  ui/                   LVGL faces (turn core/ results into widgets) — shared by every target
+  platform/             display + tick + HAL (PC framebuffer AND ESP32-S3)
+  firmware/             ESP-IDF app (device drivers: SH8601 panel, FT3168 touch, QMI8658 IMU,
+                        PCF85063 RTC, battery/ADC, NimBLE GATT server, NVS config store)
+  shot/                 headless target: renders one frame to a PNG (for CI / review)
+  sim/                  interactive target: SDL2 window with mouse-as-touch
+  tests/                Unity unit tests for core/
+  third_party/          stb_image_write.h (PNG) + Unity (submodule)
+  lvgl/                 LVGL v9 (submodule)
+android-app/            Kotlin/Jetpack Compose companion app
+docs/                   hardware notes, BLE protocol contract, tickets
 ```
 
 ## Build from source
@@ -107,7 +109,7 @@ lvgl/      LVGL v9 (submodule)
 ```sh
 sudo apt install cmake build-essential libsdl2-dev   # prerequisites
 git clone --recursive https://github.com/linquant/jnkwatch.git
-cd jnkwatch                      # already cloned? git submodule update --init --recursive
+cd jnkwatch/firmware-esp32       # already cloned? git submodule update --init --recursive
 ./build.sh                       # configures + builds all targets into ./build
 ./build/watch_sim                # interactive SDL2 window (mouse = touch)
 ./shot.sh frame.png <face> <teinte>   # headless: render one face to a PNG
@@ -123,16 +125,17 @@ many pixels — a guard against a bright background regressing AMOLED power.
 ### Device firmware (ESP-IDF ≥ 5.3)
 
 ```sh
+cd firmware-esp32
 idf.py -C firmware set-target esp32s3
 idf.py -C firmware flash monitor
 ```
 
 ## Test-driven development
 
-Logic lives in `core/` with **no LVGL/SDL dependency**, so it runs as fast host unit tests
+Logic lives in `firmware-esp32/core/` with **no LVGL/SDL dependency**, so it runs as fast host unit tests
 (Unity + CTest). The UI only translates `core/` results into widgets:
 
-1. **Red** — add a failing test in `tests/`.
+1. **Red** — add a failing test in `firmware-esp32/tests/`.
 2. **Green** — implement the pure logic in `core/`, run `./test.sh`.
 3. **Refactor** the UI in `ui/`, confirm visually with `./shot.sh` (read the PNG).
 

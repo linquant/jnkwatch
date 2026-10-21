@@ -4,7 +4,7 @@
 
 ## Contexte
 On a activé `esp_pm` avec `esp_pm_configure()` dans
-`firmware/main/main.c` (`power_mgmt_init()`), aujourd'hui réglé sur
+`firmware-esp32/firmware/main/main.c` (`power_mgmt_init()`), aujourd'hui réglé sur
 `max_freq_mhz = 240`, `min_freq_mhz = 40`, `light_sleep_enable = true`.
 La **fréquence dynamique (DFS)** fait descendre le CPU vers `min_freq` quand rien
 ne tient de verrou PM — c'est un levier d'économie **complémentaire** au light-sleep
@@ -29,7 +29,7 @@ choisir les valeurs.
   (voir le gotcha USB dans le mémo power management).
 
 ## Fichiers
-- `firmware/main/main.c` (`power_mgmt_init` : `esp_pm_config_t` min/max freq)
+- `firmware-esp32/firmware/main/main.c` (`power_mgmt_init` : `esp_pm_config_t` min/max freq)
 - `firmware/sdkconfig.defaults` (options PM / tickless idle déjà activées)
 
 ## Lié

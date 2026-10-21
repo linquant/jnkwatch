@@ -24,7 +24,7 @@ minutes) avec réveil au **poignet** et/ou **minuterie**, état minimal conserv�
 - **Identifier le GPIO `IMU_INT`** (et `RTC_INT`) sur le schéma
   `docs/hardware/vendor/ESP32-S3-Touch-AMOLED-1.43-Schematic.pdf`, confirmer qu'il
   est RTC-capable (GPIO ≤ 21 sur S3) pour `esp_sleep_enable_ext0/ext1_wakeup`.
-- Ajouter le pin à `firmware/main/board.h` ; configurer le QMI8658 en
+- Ajouter le pin à `firmware-esp32/firmware/main/board.h` ; configurer le QMI8658 en
   **wake-on-motion** (implémenter le stub `watch_set_wrist_wake` de
   `device_hal.c`), INT actif → wake.
 - Alternative/complément : alarme PCF85063 ou `esp_sleep_enable_timer_wakeup`.
@@ -37,8 +37,8 @@ minutes) avec réveil au **poignet** et/ou **minuterie**, état minimal conserv�
   cohabitation avec la veille légère déjà en place (`ui/ui.c` `power_tick`).
 
 ## Fichiers
-- `firmware/main/board.h` (pin IMU_INT / RTC_INT)
-- `firmware/main/device_hal.c` (`watch_set_wrist_wake`, entrée deep-sleep)
-- `firmware/main/imu_qmi8658.c` (wake-on-motion), `firmware/main/rtc_pcf85063.c` (alarme)
-- `firmware/main/main.c` (`esp_sleep_*`, wake cause au boot)
+- `firmware-esp32/firmware/main/board.h` (pin IMU_INT / RTC_INT)
+- `firmware-esp32/firmware/main/device_hal.c` (`watch_set_wrist_wake`, entrée deep-sleep)
+- `firmware-esp32/firmware/main/imu_qmi8658.c` (wake-on-motion), `firmware-esp32/firmware/main/rtc_pcf85063.c` (alarme)
+- `firmware-esp32/firmware/main/main.c` (`esp_sleep_*`, wake cause au boot)
 - `ui/ui.c` (`power_tick` : seuil/déclencheur veille profonde)

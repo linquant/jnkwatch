@@ -4,9 +4,9 @@
 # firmware/main/ble_server.c, then writes the manifest at the repo root.
 #
 # The app fetches this file at:
-#   https://gitlab.com/johann.nowacki/jnkwatch/-/raw/main/firmware.json
+#   https://raw.githubusercontent.com/linquant/jnkwatch/main/firmware.json
 # (see FirmwareRepo.MANIFEST_URL). The manifest's "url" points at the .bin, by
-# default a GitLab release "direct asset link" at /downloads/jnkwatch.bin.
+# default a GitHub release asset URL .../releases/download/<tag>/jnkwatch.bin.
 #
 # Usage:
 #   tools/make-firmware-manifest.sh [--bin PATH] [--major N] [--minor N]
@@ -15,10 +15,10 @@
 # ble_server.c, and the release-asset URL for tag v<major>.<minor>.
 set -euo pipefail
 
-REPO="$(cd "$(dirname "$0")/.." && pwd)"
-PROJECT="gitlab.com/johann.nowacki/jnkwatch"
+REPO="$(cd "$(dirname "$0")/../.." && pwd)"
+PROJECT="github.com/linquant/jnkwatch"
 
-BIN="$REPO/firmware/build/jnkwatch.bin"
+BIN="$REPO/firmware-esp32/firmware/build/jnkwatch.bin"
 OUT="$REPO/firmware.json"
 MAJOR=""
 MINOR=""
@@ -39,7 +39,7 @@ done
 [ -f "$BIN" ] || { echo "firmware binary not found: $BIN (build it first with idf.py build)" >&2; exit 1; }
 
 # Default version from the shared source of truth (core/version.h).
-hdr="$REPO/core/version.h"
+hdr="$REPO/firmware-esp32/core/version.h"
 [ -n "$MAJOR" ] || MAJOR="$(grep -E '#define[[:space:]]+WF_FW_MAJOR' "$hdr" | awk '{print $3}')"
 [ -n "$MINOR" ] || MINOR="$(grep -E '#define[[:space:]]+WF_FW_MINOR' "$hdr" | awk '{print $3}')"
 [ -n "$MAJOR" ] && [ -n "$MINOR" ] || { echo "could not determine version; pass --major/--minor" >&2; exit 1; }
@@ -47,7 +47,7 @@ hdr="$REPO/core/version.h"
 SIZE="$(stat -c %s "$BIN")"
 SHA="$(sha256sum "$BIN" | awk '{print $1}')"
 TAG="v${MAJOR}.${MINOR}"
-[ -n "$BIN_URL" ] || BIN_URL="https://${PROJECT}/-/releases/${TAG}/downloads/jnkwatch.bin"
+[ -n "$BIN_URL" ] || BIN_URL="https://${PROJECT}/releases/download/${TAG}/jnkwatch.bin"
 
 cat > "$OUT" <<JSON
 {
@@ -64,12 +64,10 @@ cat "$OUT"
 cat <<EOF
 
 Next steps to publish ${TAG}:
-  1. Create a GitLab release tagged ${TAG} and attach ${BIN} as an asset with a
-     direct asset link whose filepath is /downloads/jnkwatch.bin (so the URL above
-     resolves). Example with the glab CLI:
-       glab release create ${TAG} "${BIN}#jnkwatch.bin" \\
-         --assets-links '[{"name":"jnkwatch.bin","url":"<uploaded-url>","filepath":"/downloads/jnkwatch.bin"}]'
-     (or upload via the GitLab UI: Deploy > Releases > New release > Links).
+  1. Create a GitHub release tagged ${TAG} and attach ${BIN} as an asset named
+     jnkwatch.bin (so the URL above resolves). Example with the gh CLI:
+       gh release create ${TAG} "${BIN}#jnkwatch.bin" --repo linquant/jnkwatch \\
+         --title "${TAG}" --notes-file NOTES.md
   2. Commit firmware.json to main so the app can read it:
        git add firmware.json && git commit -m "release: firmware ${TAG}" && git push
   3. Make sure FW_MAJOR/FW_MINOR in ble_server.c match ${MAJOR}.${MINOR} and that

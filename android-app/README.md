@@ -1,7 +1,7 @@
 # JNKWatch — companion Android app
 
 Kotlin + Jetpack Compose app that configures the watch over BLE. Talks to the
-firmware GATT server (`firmware/main/ble_server.c`) using the contract in
+firmware GATT server (`firmware-esp32/firmware/main/ble_server.c`) using the contract in
 [`../docs/ble-protocol.md`](../docs/ble-protocol.md).
 
 ## Status
@@ -11,7 +11,7 @@ firmware GATT server (`firmware/main/ble_server.c`) using the contract in
 - Phase 4 (notification forwarding) and Phase 5 (action-button mapping) to come.
 
 ## Build & run
-1. Open the `android/` folder in **Android Studio** (Ladybug / 2024.2+). It will
+1. Open the `android-app/` folder in **Android Studio** (Ladybug / 2024.2+). It will
    create the Gradle wrapper and sync (JDK 17, Android SDK 34).
    - Or from the command line, once a wrapper exists: `./gradlew installDebug`.
 2. On first launch, grant the **Nearby devices / Bluetooth** permission.

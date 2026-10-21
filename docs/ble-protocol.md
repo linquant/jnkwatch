@@ -1,8 +1,8 @@
 # JNKWatch — BLE protocol (companion app ⇄ watch)
 
 Single source of truth for the GATT contract shared by the **watch firmware**
-(`firmware/main/ble_server.c`, NimBLE GATT server) and the **Android app**
-(`android/`). Bump the version and keep both sides in lock-step when changing it.
+(`firmware-esp32/firmware/main/ble_server.c`, NimBLE GATT server) and the **Android app**
+(`android-app/`). Bump the version and keep both sides in lock-step when changing it.
 
 **Protocol version: 3**
 
@@ -65,7 +65,7 @@ The watch applies its own timezone (`CET-1CEST,…`), so send UTC only.
 Three UTF-8 strings separated by NUL bytes: `app\0title\0body` (a trailing NUL
 is fine). Pushed into the on-device store (keeps newest 8; the watch assigns
 the id and timestamps it with its own clock). Each field is truncated to the
-`wf_notif_t` limits (`core/notify.h`): app ≤17, title ≤39, body ≤127 bytes.
+`wf_notif_t` limits (`firmware-esp32/core/notify.h`): app ≤17, title ≤39, body ≤127 bytes.
 Example bytes: `4D 65 73 73 00 48 69 00 59 6F 21 00` = "Mess\0Hi\0Yo!\0".
 
 ### NotifClear — `6a4e0104` (W), 1 byte
@@ -132,8 +132,8 @@ face, so values keep a stable row. Probes left as notifications use NotifPush
 Pushes a new firmware image to the watch over BLE. The watch writes it to the
 **inactive** OTA app slot (`esp_ota_*`) and, on success, reboots into it; a boot
 that never confirms healthy is rolled back automatically by the bootloader. The
-pure framing/state-machine logic lives in `core/ota_proto.c` (unit-tested); the
-device flash glue is `firmware/main/ota_update.c`. Requires the OTA partition
+pure framing/state-machine logic lives in `firmware-esp32/core/ota_proto.c` (unit-tested); the
+device flash glue is `firmware-esp32/firmware/main/ota_update.c`. Requires the OTA partition
 table (otadata + ota_0 + ota_1) — the migration to that table is a one-time USB
 flash (a phone cannot deliver a partition table).
 

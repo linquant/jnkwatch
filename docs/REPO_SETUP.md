@@ -9,13 +9,13 @@ with **LVGL** and **Unity** as pinned git submodules. Run them from the project 
 
 ```sh
 # 0) sanity: build & tests pass first
-./build.sh && ./test.sh
+cd firmware-esp32 && ./build.sh && ./test.sh
 
 # 1) init the repo
 git init
 git add .gitignore LICENSE NOTICE README.md CONTRIBUTING.md \
         lv_conf.h CMakeLists.txt build.sh shot.sh test.sh \
-        core ui platform sim shot tests docs
+        core ui platform sim shot tests docs firmware-esp32 tools
 git add third_party/stb_image_write.h
 
 # 2) LVGL as a submodule pinned to v9.2.2
@@ -43,7 +43,7 @@ git push -u origin main
 
 ```sh
 git clone --recursive git@github.com:linquant/jnkwatch.git
-cd watch && ./build.sh && ./test.sh
+cd watch && cd firmware-esp32 && ./build.sh && ./test.sh
 ```
 
 ## Notes

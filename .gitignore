@@ -1,5 +1,5 @@
 # Build output
-/build/
+/firmware-esp32/build/
 
 # Rendered frames from ./shot.sh (kept out of the repo)
 *.png
@@ -19,31 +19,31 @@ compile_commands.json
 /docs/hardware/vendor/
 
 # ESP-IDF firmware build artifacts
-/firmware/build/
-/firmware/managed_components/
-/firmware/sdkconfig
-/firmware/sdkconfig.old
-/firmware/dependencies.lock
+/firmware-esp32/firmware/build/
+/firmware-esp32/firmware/managed_components/
+/firmware-esp32/firmware/sdkconfig
+/firmware-esp32/firmware/sdkconfig.old
+/firmware-esp32/firmware/dependencies.lock
 
 # Built APKs (binaries, not versioned)
 *.apk
 
 # Android (Gradle/Studio) build artifacts
-/android/.gradle/
-/android/build/
-/android/app/build/
-/android/local.properties
-/android/.idea/
-/android/*.iml
-/android/app/*.iml
-/android/captures/
+/android-app/.gradle/
+/android-app/build/
+/android-app/app/build/
+/android-app/local.properties
+/android-app/.idea/
+/android-app/*.iml
+/android-app/app/*.iml
+/android-app/captures/
 
-# Battery logs pulled off the watch (tools/batlog.sh)
-/logs/
+# Battery logs pulled off the watch (firmware-esp32/tools/batlog.sh)
+/firmware-esp32/logs/
 
 # Local Claude Code MCP config (environment-specific, not shared)
 /.mcp.json
 
-# Python bytecode cache (tools/)
+# Python bytecode cache (firmware-esp32/tools/)
 __pycache__/
 *.pyc
